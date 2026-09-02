@@ -271,6 +271,55 @@ fn test_missing_project_url_planning_error() {
 }
 
 #[test]
+fn test_powershell_project_path_sanitization() {
+    let (_dir, storage, project, _, _, _) = setup_test_environment();
+
+    // Register a PowerShell app that accidentally configured {PROJECT_PATH}
+    let ps_app = storage
+        .create_application(Application {
+            id: "".to_string(),
+            name: "PowerShell".to_string(),
+            command: "/ps".to_string(),
+            executable_path: "pwsh.exe".to_string(),
+            normal_launch: NormalLaunchConfig {
+                arguments: vec!["-NoExit".to_string()],
+            },
+            project_launch: Some(ProjectLaunchConfig {
+                enabled: true,
+                arguments: vec!["{PROJECT_PATH}".to_string()],
+            }),
+            working_directory: None,
+            icon: None,
+            created_at: "".to_string(),
+            updated_at: "".to_string(),
+        })
+        .unwrap();
+
+    let plan = plan_raw("deepfake /ps", &storage).unwrap();
+    match plan {
+        ExecutionPlan::Launch { actions } => {
+            assert_eq!(actions.len(), 1);
+            match &actions[0] {
+                LaunchAction::Process {
+                    name,
+                    executable_path,
+                    arguments,
+                    working_directory,
+                } => {
+                    assert_eq!(name, "PowerShell");
+                    assert_eq!(executable_path, &ps_app.executable_path);
+                    // Sanitizer stripped the raw directory and ensured -NoExit is present
+                    assert_eq!(arguments, &vec!["-NoExit".to_string()]);
+                    assert_eq!(working_directory, &Some(project.path.clone()));
+                }
+                _ => panic!("Expected Process for PowerShell"),
+            }
+        }
+        _ => panic!("Expected ExecutionPlan::Launch"),
+    }
+}
+
+#[test]
 fn test_group_execution_order_and_action_index() {
     let (_dir, storage, _, app_v, app_b, _) = setup_test_environment();
 

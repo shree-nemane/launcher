@@ -8,11 +8,16 @@ pub mod storage;
 pub mod validation;
 pub mod window_manager;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    window_manager::configure_webview2_environment();
+
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            window_manager::show_and_reset_launcher(app);
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
@@ -38,7 +43,12 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                let _ = window.emit("launcher://hide", ());
                 let _ = window.hide();
+                if let Some(wv) = window.get_webview_window(window.label()) {
+                    window_manager::suspend_webview(&wv);
+                }
+                window_manager::trim_process_memory();
             }
         })
         .invoke_handler(tauri::generate_handler![

@@ -149,7 +149,7 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
       className="flex flex-col max-h-[420px] overflow-hidden text-neutral-100"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-800/80 bg-neutral-950/80">
+      <div data-tauri-drag-region className="flex items-center justify-between px-5 py-3 border-b border-neutral-800/80 bg-neutral-950/80 cursor-default">
         <div className="flex items-center space-x-2.5">
           <button
             type="button"

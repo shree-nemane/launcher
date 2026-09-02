@@ -52,13 +52,14 @@ pub fn validate_application(
     }
 
     let exe_path = Path::new(&application.executable_path);
-    if !exe_path.exists() {
+    let has_separators = application.executable_path.contains('/') || application.executable_path.contains('\\');
+    if (exe_path.is_absolute() || has_separators) && !exe_path.exists() {
         return Err(AppError::Validation(format!(
             "Executable path does not exist: {}",
             application.executable_path
         )));
     }
-    if !exe_path.is_file() {
+    if (exe_path.is_absolute() || has_separators) && !exe_path.is_file() {
         return Err(AppError::Validation(format!(
             "Executable path is not a file: {}",
             application.executable_path

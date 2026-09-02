@@ -45,12 +45,8 @@ fn create_run_command_actions(proj: &Project) -> Vec<LaunchAction> {
             let ps_exe = detect_powershell_executable();
             actions.push(LaunchAction::Process {
                 name: title.clone(),
-                executable_path: "cmd.exe".to_string(),
+                executable_path: ps_exe.to_string(),
                 arguments: vec![
-                    "/c".to_string(),
-                    "start".to_string(),
-                    title,
-                    ps_exe.to_string(),
                     "-NoExit".to_string(),
                     "-Command".to_string(),
                     format!("Set-Location '{}'; {}", work_dir, cmd.command),
@@ -71,6 +67,55 @@ fn create_run_command_actions(proj: &Project) -> Vec<LaunchAction> {
     }
 
     actions
+}
+
+fn sanitize_shell_arguments(
+    executable_path: &str,
+    arguments: Vec<String>,
+    project_path: Option<&str>,
+) -> Vec<String> {
+    let lower_exe = executable_path.to_lowercase();
+    let is_powershell = lower_exe.ends_with("pwsh.exe")
+        || lower_exe.ends_with("powershell.exe")
+        || lower_exe == "pwsh"
+        || lower_exe == "powershell";
+    let is_cmd = lower_exe.ends_with("cmd.exe") || lower_exe == "cmd";
+
+    if let Some(proj_dir) = project_path {
+        if is_powershell {
+            // Remove bare project path argument that causes PowerShell to execute the directory as a script
+            let mut cleaned: Vec<String> = arguments
+                .into_iter()
+                .filter(|arg| {
+                    let trimmed = arg.trim();
+                    trimmed != proj_dir && trimmed != format!("\"{}\"", proj_dir)
+                })
+                .collect();
+
+            // Ensure -NoExit is present so PowerShell stays open
+            if !cleaned
+                .iter()
+                .any(|a| a.eq_ignore_ascii_case("-NoExit") || a.eq_ignore_ascii_case("--NoExit"))
+            {
+                cleaned.insert(0, "-NoExit".to_string());
+            }
+            return cleaned;
+        } else if is_cmd {
+            let mut cleaned: Vec<String> = arguments
+                .into_iter()
+                .filter(|arg| {
+                    let trimmed = arg.trim();
+                    trimmed != proj_dir && trimmed != format!("\"{}\"", proj_dir)
+                })
+                .collect();
+            if !cleaned.iter().any(|a| a.eq_ignore_ascii_case("/k")) {
+                cleaned.insert(0, "/k".to_string());
+            }
+            return cleaned;
+        }
+    }
+
+    arguments
 }
 
 pub fn plan(resolved: &ResolvedCommand) -> Result<ExecutionPlan, PlanningError> {
@@ -114,12 +159,8 @@ pub fn plan(resolved: &ResolvedCommand) -> Result<ExecutionPlan, PlanningError> 
                                 let ps_exe = detect_powershell_executable();
                                 actions.push(LaunchAction::Process {
                                     name: format!("{}: PowerShell", proj.name),
-                                    executable_path: "cmd.exe".to_string(),
+                                    executable_path: ps_exe.to_string(),
                                     arguments: vec![
-                                        "/c".to_string(),
-                                        "start".to_string(),
-                                        format!("{}: PowerShell", proj.name),
-                                        ps_exe.to_string(),
                                         "-NoExit".to_string(),
                                         "-Command".to_string(),
                                         format!("Set-Location '{}'", work_dir),
@@ -148,7 +189,12 @@ pub fn plan(resolved: &ResolvedCommand) -> Result<ExecutionPlan, PlanningError> 
                 let (arguments, working_directory) = if is_project_launch {
                     let proj = project.as_ref().unwrap();
                     let pl_config = app.project_launch.as_ref().unwrap();
-                    let args = interpolate_arguments(&pl_config.arguments, proj)?;
+                    let raw_args = interpolate_arguments(&pl_config.arguments, proj)?;
+                    let args = sanitize_shell_arguments(
+                        &app.executable_path,
+                        raw_args,
+                        Some(&proj.path),
+                    );
 
                     let work_dir = if let Some(ref wd) = app.working_directory {
                         Some(interpolate_string(wd, proj)?)
@@ -163,7 +209,12 @@ pub fn plan(resolved: &ResolvedCommand) -> Result<ExecutionPlan, PlanningError> 
                     (args, work_dir)
                 } else {
                     // Normal application launch
-                    let args = app.normal_launch.arguments.clone();
+                    let raw_args = app.normal_launch.arguments.clone();
+                    let args = sanitize_shell_arguments(
+                        &app.executable_path,
+                        raw_args,
+                        project.as_ref().map(|p| p.path.as_str()),
+                    );
                     let work_dir = app.working_directory.clone();
                     (args, work_dir)
                 };

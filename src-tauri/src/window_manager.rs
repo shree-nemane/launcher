@@ -4,8 +4,157 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
+#[cfg(target_os = "windows")]
+pub fn configure_webview2_environment() {
+    let current_args = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
+    let memory_flags = [
+        "--in-process-gpu",
+        "--enable-features=NetworkServiceInProcess",
+        "--disable-features=CalculateNativeWinOcclusion,SpareRendererForSitePerProcess,AudioServiceOutOfProcess",
+        "--disable-gpu-shader-disk-cache",
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--disable-domain-reliability",
+        "--disable-sync",
+        "--disable-speech-api",
+        "--renderer-process-limit=1",
+        "--enable-low-end-device-mode",
+        "--process-per-site",
+        "--js-flags=--max-old-space-size=64",
+    ]
+    .join(" ");
+
+    let combined_args = if current_args.is_empty() {
+        memory_flags
+    } else {
+        format!("{} {}", current_args, memory_flags)
+    };
+
+    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", combined_args);
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn configure_webview2_environment() {}
+
+#[cfg(target_os = "windows")]
+pub fn trim_process_memory() {
+    #[allow(non_snake_case)]
+    #[repr(C)]
+    struct PROCESSENTRY32W {
+        dwSize: u32,
+        cntUsage: u32,
+        th32ProcessID: u32,
+        th32DefaultHeapID: usize,
+        th32ModuleID: u32,
+        cntThreads: u32,
+        th32ParentProcessID: u32,
+        pcPriClassBase: i32,
+        dwFlags: u32,
+        szExeFile: [u16; 260],
+    }
+
+    extern "system" {
+        fn GetCurrentProcess() -> *mut std::ffi::c_void;
+        fn GetCurrentProcessId() -> u32;
+        fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> *mut std::ffi::c_void;
+        fn SetProcessWorkingSetSize(
+            hProcess: *mut std::ffi::c_void,
+            dwMinimumWorkingSetSize: usize,
+            dwMaximumWorkingSetSize: usize,
+        ) -> i32;
+        fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> *mut std::ffi::c_void;
+        fn Process32FirstW(hSnapshot: *mut std::ffi::c_void, lppe: *mut PROCESSENTRY32W) -> i32;
+        fn Process32NextW(hSnapshot: *mut std::ffi::c_void, lppe: *mut PROCESSENTRY32W) -> i32;
+        fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
+    }
+
+    const TH32CS_SNAPPROCESS: u32 = 0x00000002;
+    const PROCESS_SET_QUOTA: u32 = 0x0100;
+    const PROCESS_QUERY_INFORMATION: u32 = 0x0400;
+
+    unsafe {
+        // 1. Trim the parent process
+        let parent = GetCurrentProcess();
+        SetProcessWorkingSetSize(parent, usize::MAX, usize::MAX);
+
+        // 2. Enumerate and trim all child WebView2 processes (Manager, Renderer, etc.)
+        let current_pid = GetCurrentProcessId();
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        let invalid_handle = (-1isize) as *mut std::ffi::c_void;
+
+        if !snapshot.is_null() && snapshot != invalid_handle {
+            let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+            entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+            if Process32FirstW(snapshot, &mut entry) != 0 {
+                loop {
+                    if entry.th32ParentProcessID == current_pid {
+                        let child = OpenProcess(
+                            PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION,
+                            0,
+                            entry.th32ProcessID,
+                        );
+                        if !child.is_null() {
+                            SetProcessWorkingSetSize(child, usize::MAX, usize::MAX);
+                            CloseHandle(child);
+                        }
+                    }
+                    if Process32NextW(snapshot, &mut entry) == 0 {
+                        break;
+                    }
+                }
+            }
+            CloseHandle(snapshot);
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn trim_process_memory() {}
+
+#[cfg(target_os = "windows")]
+pub fn suspend_webview(window: &tauri::WebviewWindow) {
+    let _ = window.with_webview(|webview| {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_3;
+        use windows_core::Interface;
+
+        unsafe {
+            let controller = webview.controller();
+            if let Ok(core) = controller.CoreWebView2() {
+                if let Ok(core3) = core.cast::<ICoreWebView2_3>() {
+                    let _ = core3.TrySuspend(None);
+                }
+            }
+        }
+    });
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn suspend_webview(_window: &tauri::WebviewWindow) {}
+
+#[cfg(target_os = "windows")]
+pub fn resume_webview(window: &tauri::WebviewWindow) {
+    let _ = window.with_webview(|webview| {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_3;
+        use windows_core::Interface;
+
+        unsafe {
+            let controller = webview.controller();
+            if let Ok(core) = controller.CoreWebView2() {
+                if let Ok(core3) = core.cast::<ICoreWebView2_3>() {
+                    let _ = core3.Resume();
+                }
+            }
+        }
+    });
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn resume_webview(_window: &tauri::WebviewWindow) {}
+
 pub fn show_and_reset_launcher(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        resume_webview(&window);
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.center();
@@ -16,6 +165,7 @@ pub fn show_and_reset_launcher(app: &AppHandle) {
 
 pub fn show_and_navigate(app: &AppHandle, view: &str) {
     if let Some(window) = app.get_webview_window("main") {
+        resume_webview(&window);
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.center();
@@ -50,7 +200,10 @@ pub fn toggle_launcher(app: &AppHandle) {
         let is_focused = window.is_focused().unwrap_or(false);
 
         if is_visible && is_focused {
+            let _ = window.emit("launcher://hide", ());
             let _ = window.hide();
+            suspend_webview(&window);
+            trim_process_memory();
         } else {
             show_and_reset_launcher(app);
         }

@@ -2,7 +2,10 @@ import React from "react";
 
 export function ShortcutFooter({ onOpenHelp }) {
   return (
-    <div className="flex items-center justify-between px-4 py-2 border-t border-neutral-800/80 bg-neutral-950/40 text-[11px] text-neutral-500">
+    <div
+      data-tauri-drag-region
+      className="flex items-center justify-between px-4 py-2 border-t border-neutral-800/80 bg-neutral-950/40 text-[11px] text-neutral-500 cursor-default"
+    >
       <div className="flex items-center space-x-3">
         <span className="flex items-center space-x-1">
           <kbd className="px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-neutral-400 font-mono text-[10px]">

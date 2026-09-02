@@ -31,8 +31,39 @@ export function useApplicationForm({ initialData = null, onSuccess = null }) {
     }
   }, [initialData]);
 
+  const applyPreset = useCallback((preset) => {
+    setFormData({
+      name: preset.name || "",
+      command: preset.command || "",
+      executablePath: preset.executablePath || "",
+      normalArguments: preset.normalArguments || [],
+      projectLaunchEnabled: preset.projectLaunchEnabled || false,
+      projectArguments: preset.projectArguments || [],
+      workingDirectory: preset.workingDirectory || "",
+    });
+    setErrors({});
+  }, []);
+
   const handleChange = useCallback((field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+
+      // If user enables project launch and arguments are empty, choose smart default based on app type
+      if (field === "projectLaunchEnabled" && value && (!prev.projectArguments || prev.projectArguments.length === 0)) {
+        const lowerExe = prev.executablePath.toLowerCase();
+        if (lowerExe.includes("pwsh") || lowerExe.includes("powershell")) {
+          next.projectArguments = ["-NoExit"];
+        } else if (lowerExe.includes("cmd")) {
+          next.projectArguments = ["/k"];
+        } else if (lowerExe.includes("chrome") || lowerExe.includes("msedge") || lowerExe.includes("brave") || lowerExe.includes("firefox")) {
+          next.projectArguments = ["{PROJECT_URL}"];
+        } else {
+          next.projectArguments = ["{PROJECT_PATH}"];
+        }
+      }
+
+      return next;
+    });
     setErrors((prev) => ({ ...prev, [field]: null, general: null }));
   }, []);
 
@@ -135,6 +166,7 @@ export function useApplicationForm({ initialData = null, onSuccess = null }) {
     errors,
     isSaving,
     handleChange,
+    applyPreset,
     handleBrowseExecutable,
     handleSave,
   };

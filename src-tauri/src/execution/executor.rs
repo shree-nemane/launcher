@@ -203,6 +203,41 @@ pub fn execute(plan: &ExecutionPlan) -> ExecutionResult {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn resolve_executable_and_args(executable_path: &str, arguments: &[String]) -> (String, Vec<String>) {
+    let lower = executable_path.to_lowercase();
+
+    // 1. If it's a batch script (.cmd or .bat), launch via cmd.exe /c
+    if lower.ends_with(".cmd") || lower.ends_with(".bat") {
+        let mut cmd_args = vec!["/c".to_string(), executable_path.to_string()];
+        cmd_args.extend_from_slice(arguments);
+        return ("cmd.exe".to_string(), cmd_args);
+    }
+
+    // 2. If it is "code" or "code.exe" and not an absolute path, resolve actual Code.exe
+    if lower == "code" || lower == "code.exe" {
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            let user_code = Path::new(&local_app_data)
+                .join("Programs")
+                .join("Microsoft VS Code")
+                .join("Code.exe");
+            if user_code.is_file() {
+                return (user_code.to_string_lossy().to_string(), arguments.to_vec());
+            }
+        }
+        let sys_code = Path::new("C:\\Program Files\\Microsoft VS Code\\Code.exe");
+        if sys_code.is_file() {
+            return (sys_code.to_string_lossy().to_string(), arguments.to_vec());
+        }
+        let sys_code_x86 = Path::new("C:\\Program Files (x86)\\Microsoft VS Code\\Code.exe");
+        if sys_code_x86.is_file() {
+            return (sys_code_x86.to_string_lossy().to_string(), arguments.to_vec());
+        }
+    }
+
+    (executable_path.to_string(), arguments.to_vec())
+}
+
 fn spawn_process(
     action_index: usize,
     name: &str,
@@ -210,8 +245,21 @@ fn spawn_process(
     arguments: &[String],
     working_directory: &Option<String>,
 ) -> ExecutionActionResult {
-    let mut cmd = Command::new(executable_path);
-    cmd.args(arguments);
+    #[cfg(target_os = "windows")]
+    let (real_exe, real_args) = resolve_executable_and_args(executable_path, arguments);
+
+    #[cfg(not(target_os = "windows"))]
+    let (real_exe, real_args) = (executable_path.to_string(), arguments.to_vec());
+
+    let mut cmd = Command::new(&real_exe);
+    cmd.args(&real_args);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+        cmd.creation_flags(CREATE_NEW_CONSOLE);
+    }
 
     if let Some(ref wd) = working_directory {
         cmd.current_dir(wd);

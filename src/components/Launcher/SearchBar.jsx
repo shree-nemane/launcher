@@ -18,7 +18,10 @@ export function SearchBar({
   }, [inputRef]);
 
   return (
-    <div className="relative flex items-center h-14 px-4 bg-neutral-950/90 border-b border-neutral-800/80">
+    <div
+      data-tauri-drag-region
+      className="relative flex items-center h-14 px-4 bg-neutral-950/90 border-b border-neutral-800/80 cursor-default"
+    >
       {/* 2px Animated Indeterminate Progress Line while executing */}
       {isExecuting && (
         <div

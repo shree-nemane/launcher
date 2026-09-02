@@ -6,11 +6,26 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
+use std::time::SystemTime;
 use uuid::Uuid;
+
+#[derive(Debug, Clone)]
+struct CachedItem<T> {
+    data: T,
+    last_modified: Option<SystemTime>,
+}
+
+#[derive(Debug, Clone)]
+struct StorageCache {
+    projects: CachedItem<Vec<Project>>,
+    applications: CachedItem<Vec<Application>>,
+    groups: CachedItem<Vec<ApplicationGroup>>,
+    settings: CachedItem<Settings>,
+}
 
 pub struct StorageManager {
     data_dir: PathBuf,
-    lock: RwLock<()>,
+    cache: RwLock<StorageCache>,
 }
 
 impl StorageManager {
@@ -19,28 +34,59 @@ impl StorageManager {
             fs::create_dir_all(&data_dir)?;
         }
 
-        let manager = Self {
-            data_dir,
-            lock: RwLock::new(()),
+        Self::ensure_file_exists_static(&data_dir, "projects.json", &Vec::<Project>::new())?;
+        Self::ensure_file_exists_static(&data_dir, "applications.json", &Vec::<Application>::new())?;
+        Self::ensure_file_exists_static(&data_dir, "groups.json", &Vec::<ApplicationGroup>::new())?;
+        Self::ensure_file_exists_static(&data_dir, "settings.json", &Settings::default())?;
+
+        let projects_path = data_dir.join("projects.json");
+        let apps_path = data_dir.join("applications.json");
+        let groups_path = data_dir.join("groups.json");
+        let settings_path = data_dir.join("settings.json");
+
+        let projects: Vec<Project> = Self::read_json_static(&data_dir, "projects.json")?;
+        let applications: Vec<Application> = Self::read_json_static(&data_dir, "applications.json")?;
+        let groups: Vec<ApplicationGroup> = Self::read_json_static(&data_dir, "groups.json")?;
+        let settings: Settings = Self::read_json_static(&data_dir, "settings.json")?;
+
+        let cache = StorageCache {
+            projects: CachedItem {
+                data: projects,
+                last_modified: Self::get_file_last_modified(&projects_path),
+            },
+            applications: CachedItem {
+                data: applications,
+                last_modified: Self::get_file_last_modified(&apps_path),
+            },
+            groups: CachedItem {
+                data: groups,
+                last_modified: Self::get_file_last_modified(&groups_path),
+            },
+            settings: CachedItem {
+                data: settings,
+                last_modified: Self::get_file_last_modified(&settings_path),
+            },
         };
 
-        manager.ensure_file_exists("projects.json", &Vec::<Project>::new())?;
-        manager.ensure_file_exists("applications.json", &Vec::<Application>::new())?;
-        manager.ensure_file_exists("groups.json", &Vec::<ApplicationGroup>::new())?;
-        manager.ensure_file_exists("settings.json", &Settings::default())?;
-
-        Ok(manager)
+        Ok(Self {
+            data_dir,
+            cache: RwLock::new(cache),
+        })
     }
 
-    fn ensure_file_exists<T: serde::Serialize>(&self, filename: &str, default_data: &T) -> Result<(), AppError> {
-        let file_path = self.data_dir.join(filename);
+    fn get_file_last_modified(path: &Path) -> Option<SystemTime> {
+        fs::metadata(path).and_then(|m| m.modified()).ok()
+    }
+
+    fn ensure_file_exists_static<T: serde::Serialize>(data_dir: &Path, filename: &str, default_data: &T) -> Result<(), AppError> {
+        let file_path = data_dir.join(filename);
         if !file_path.exists() {
-            self.write_json_atomic(&file_path, default_data)?;
+            Self::write_json_atomic_static(&file_path, default_data)?;
         }
         Ok(())
     }
 
-    fn write_json_atomic<T: serde::Serialize>(&self, target_path: &Path, data: &T) -> Result<(), AppError> {
+    fn write_json_atomic_static<T: serde::Serialize>(target_path: &Path, data: &T) -> Result<(), AppError> {
         let json_str = serde_json::to_string_pretty(data)?;
 
         // Before replacing existing valid file, create/update backup of previous state
@@ -60,9 +106,9 @@ impl StorageManager {
         Ok(())
     }
 
-    fn read_json<T: serde::de::DeserializeOwned>(&self, filename: &str) -> Result<T, AppError> {
-        let file_path = self.data_dir.join(filename);
-        let backup_path = self.data_dir.join(format!("{}.bak", filename));
+    fn read_json_static<T: serde::de::DeserializeOwned>(data_dir: &Path, filename: &str) -> Result<T, AppError> {
+        let file_path = data_dir.join(filename);
+        let backup_path = data_dir.join(format!("{}.bak", filename));
 
         if !file_path.exists() {
             if backup_path.exists() {
@@ -111,7 +157,7 @@ impl StorageManager {
 
     fn write_file<T: serde::Serialize>(&self, filename: &str, data: &T) -> Result<(), AppError> {
         let file_path = self.data_dir.join(filename);
-        self.write_json_atomic(&file_path, data)
+        Self::write_json_atomic_static(&file_path, data)
     }
 
     // ==========================================
@@ -119,8 +165,23 @@ impl StorageManager {
     // ==========================================
 
     pub fn get_projects(&self) -> Result<Vec<Project>, AppError> {
-        let _guard = self.lock.read().unwrap();
-        self.read_json("projects.json")
+        let file_path = self.data_dir.join("projects.json");
+        let disk_mtime = Self::get_file_last_modified(&file_path);
+
+        {
+            let guard = self.cache.read().unwrap();
+            if disk_mtime.is_some() && guard.projects.last_modified == disk_mtime {
+                return Ok(guard.projects.data.clone());
+            }
+        }
+
+        let mut guard = self.cache.write().unwrap();
+        let projects: Vec<Project> = Self::read_json_static(&self.data_dir, "projects.json")?;
+        guard.projects = CachedItem {
+            data: projects.clone(),
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+        Ok(projects)
     }
 
     pub fn get_project(&self, id: &str) -> Result<Project, AppError> {
@@ -140,8 +201,7 @@ impl StorageManager {
     }
 
     pub fn create_project(&self, mut project: Project) -> Result<Project, AppError> {
-        let _guard = self.lock.write().unwrap();
-        let mut projects: Vec<Project> = self.read_json("projects.json")?;
+        let mut projects = self.get_projects()?;
 
         if project.id.trim().is_empty() {
             project.id = format!("project_{}", Uuid::new_v4().simple());
@@ -155,12 +215,19 @@ impl StorageManager {
 
         projects.push(project.clone());
         self.write_file("projects.json", &projects)?;
+
+        let file_path = self.data_dir.join("projects.json");
+        let mut guard = self.cache.write().unwrap();
+        guard.projects = CachedItem {
+            data: projects,
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+
         Ok(project)
     }
 
     pub fn update_project(&self, mut project: Project) -> Result<Project, AppError> {
-        let _guard = self.lock.write().unwrap();
-        let mut projects: Vec<Project> = self.read_json("projects.json")?;
+        let mut projects = self.get_projects()?;
 
         let index = projects
             .iter()
@@ -174,12 +241,19 @@ impl StorageManager {
 
         projects[index] = project.clone();
         self.write_file("projects.json", &projects)?;
+
+        let file_path = self.data_dir.join("projects.json");
+        let mut guard = self.cache.write().unwrap();
+        guard.projects = CachedItem {
+            data: projects,
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+
         Ok(project)
     }
 
     pub fn delete_project(&self, id: &str) -> Result<(), AppError> {
-        let _guard = self.lock.write().unwrap();
-        let mut projects: Vec<Project> = self.read_json("projects.json")?;
+        let mut projects = self.get_projects()?;
 
         let original_len = projects.len();
         projects.retain(|p| p.id != id);
@@ -189,6 +263,14 @@ impl StorageManager {
         }
 
         self.write_file("projects.json", &projects)?;
+
+        let file_path = self.data_dir.join("projects.json");
+        let mut guard = self.cache.write().unwrap();
+        guard.projects = CachedItem {
+            data: projects,
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+
         Ok(())
     }
 
@@ -197,8 +279,23 @@ impl StorageManager {
     // ==========================================
 
     pub fn get_applications(&self) -> Result<Vec<Application>, AppError> {
-        let _guard = self.lock.read().unwrap();
-        self.read_json("applications.json")
+        let file_path = self.data_dir.join("applications.json");
+        let disk_mtime = Self::get_file_last_modified(&file_path);
+
+        {
+            let guard = self.cache.read().unwrap();
+            if disk_mtime.is_some() && guard.applications.last_modified == disk_mtime {
+                return Ok(guard.applications.data.clone());
+            }
+        }
+
+        let mut guard = self.cache.write().unwrap();
+        let apps: Vec<Application> = Self::read_json_static(&self.data_dir, "applications.json")?;
+        guard.applications = CachedItem {
+            data: apps.clone(),
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+        Ok(apps)
     }
 
     pub fn get_application(&self, id: &str) -> Result<Application, AppError> {
@@ -217,8 +314,7 @@ impl StorageManager {
     }
 
     pub fn create_application(&self, mut application: Application) -> Result<Application, AppError> {
-        let _guard = self.lock.write().unwrap();
-        let mut apps: Vec<Application> = self.read_json("applications.json")?;
+        let mut apps = self.get_applications()?;
 
         if application.id.trim().is_empty() {
             application.id = format!("app_{}", Uuid::new_v4().simple());
@@ -232,12 +328,19 @@ impl StorageManager {
 
         apps.push(application.clone());
         self.write_file("applications.json", &apps)?;
+
+        let file_path = self.data_dir.join("applications.json");
+        let mut guard = self.cache.write().unwrap();
+        guard.applications = CachedItem {
+            data: apps,
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+
         Ok(application)
     }
 
     pub fn update_application(&self, mut application: Application) -> Result<Application, AppError> {
-        let _guard = self.lock.write().unwrap();
-        let mut apps: Vec<Application> = self.read_json("applications.json")?;
+        let mut apps = self.get_applications()?;
 
         let index = apps
             .iter()
@@ -251,12 +354,19 @@ impl StorageManager {
 
         apps[index] = application.clone();
         self.write_file("applications.json", &apps)?;
+
+        let file_path = self.data_dir.join("applications.json");
+        let mut guard = self.cache.write().unwrap();
+        guard.applications = CachedItem {
+            data: apps,
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+
         Ok(application)
     }
 
     pub fn delete_application(&self, id: &str) -> Result<(), AppError> {
-        let _guard = self.lock.write().unwrap();
-        let mut apps: Vec<Application> = self.read_json("applications.json")?;
+        let mut apps = self.get_applications()?;
 
         let original_len = apps.len();
         apps.retain(|a| a.id != id);
@@ -267,8 +377,17 @@ impl StorageManager {
 
         self.write_file("applications.json", &apps)?;
 
+        let app_file_path = self.data_dir.join("applications.json");
+        {
+            let mut guard = self.cache.write().unwrap();
+            guard.applications = CachedItem {
+                data: apps,
+                last_modified: Self::get_file_last_modified(&app_file_path),
+            };
+        }
+
         // Cascading referential cleanup: remove deleted app ID from all groups
-        let mut groups: Vec<ApplicationGroup> = self.read_json("groups.json")?;
+        let mut groups = self.get_groups()?;
         let mut groups_modified = false;
         let now = Utc::now().to_rfc3339();
 
@@ -287,6 +406,12 @@ impl StorageManager {
 
         if groups_modified {
             self.write_file("groups.json", &groups)?;
+            let groups_file_path = self.data_dir.join("groups.json");
+            let mut guard = self.cache.write().unwrap();
+            guard.groups = CachedItem {
+                data: groups,
+                last_modified: Self::get_file_last_modified(&groups_file_path),
+            };
         }
 
         Ok(())
@@ -297,8 +422,23 @@ impl StorageManager {
     // ==========================================
 
     pub fn get_groups(&self) -> Result<Vec<ApplicationGroup>, AppError> {
-        let _guard = self.lock.read().unwrap();
-        self.read_json("groups.json")
+        let file_path = self.data_dir.join("groups.json");
+        let disk_mtime = Self::get_file_last_modified(&file_path);
+
+        {
+            let guard = self.cache.read().unwrap();
+            if disk_mtime.is_some() && guard.groups.last_modified == disk_mtime {
+                return Ok(guard.groups.data.clone());
+            }
+        }
+
+        let mut guard = self.cache.write().unwrap();
+        let groups: Vec<ApplicationGroup> = Self::read_json_static(&self.data_dir, "groups.json")?;
+        guard.groups = CachedItem {
+            data: groups.clone(),
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+        Ok(groups)
     }
 
     pub fn get_group(&self, id: &str) -> Result<ApplicationGroup, AppError> {
@@ -310,9 +450,8 @@ impl StorageManager {
     }
 
     pub fn create_group(&self, mut group: ApplicationGroup) -> Result<ApplicationGroup, AppError> {
-        let _guard = self.lock.write().unwrap();
-        let apps: Vec<Application> = self.read_json("applications.json")?;
-        let mut groups: Vec<ApplicationGroup> = self.read_json("groups.json")?;
+        let apps = self.get_applications()?;
+        let mut groups = self.get_groups()?;
 
         if group.id.trim().is_empty() {
             group.id = format!("group_{}", Uuid::new_v4().simple());
@@ -326,13 +465,20 @@ impl StorageManager {
 
         groups.push(group.clone());
         self.write_file("groups.json", &groups)?;
+
+        let file_path = self.data_dir.join("groups.json");
+        let mut guard = self.cache.write().unwrap();
+        guard.groups = CachedItem {
+            data: groups,
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+
         Ok(group)
     }
 
     pub fn update_group(&self, mut group: ApplicationGroup) -> Result<ApplicationGroup, AppError> {
-        let _guard = self.lock.write().unwrap();
-        let apps: Vec<Application> = self.read_json("applications.json")?;
-        let mut groups: Vec<ApplicationGroup> = self.read_json("groups.json")?;
+        let apps = self.get_applications()?;
+        let mut groups = self.get_groups()?;
 
         let index = groups
             .iter()
@@ -346,12 +492,19 @@ impl StorageManager {
 
         groups[index] = group.clone();
         self.write_file("groups.json", &groups)?;
+
+        let file_path = self.data_dir.join("groups.json");
+        let mut guard = self.cache.write().unwrap();
+        guard.groups = CachedItem {
+            data: groups,
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+
         Ok(group)
     }
 
     pub fn delete_group(&self, id: &str) -> Result<(), AppError> {
-        let _guard = self.lock.write().unwrap();
-        let mut groups: Vec<ApplicationGroup> = self.read_json("groups.json")?;
+        let mut groups = self.get_groups()?;
 
         let original_len = groups.len();
         groups.retain(|g| g.id != id);
@@ -362,12 +515,28 @@ impl StorageManager {
 
         self.write_file("groups.json", &groups)?;
 
+        let groups_file_path = self.data_dir.join("groups.json");
+        {
+            let mut guard = self.cache.write().unwrap();
+            guard.groups = CachedItem {
+                data: groups,
+                last_modified: Self::get_file_last_modified(&groups_file_path),
+            };
+        }
+
         // Cascading referential cleanup: reset defaultApplicationGroupId if this group was default
-        let mut settings: Settings = self.read_json("settings.json")?;
+        let mut settings = self.get_settings()?;
         if settings.default_application_group_id.as_deref() == Some(id) {
             settings.default_application_group_id = None;
             settings.updated_at = Utc::now().to_rfc3339();
+
             self.write_file("settings.json", &settings)?;
+            let settings_file_path = self.data_dir.join("settings.json");
+            let mut guard = self.cache.write().unwrap();
+            guard.settings = CachedItem {
+                data: settings,
+                last_modified: Self::get_file_last_modified(&settings_file_path),
+            };
         }
 
         Ok(())
@@ -378,18 +547,40 @@ impl StorageManager {
     // ==========================================
 
     pub fn get_settings(&self) -> Result<Settings, AppError> {
-        let _guard = self.lock.read().unwrap();
-        self.read_json("settings.json")
+        let file_path = self.data_dir.join("settings.json");
+        let disk_mtime = Self::get_file_last_modified(&file_path);
+
+        {
+            let guard = self.cache.read().unwrap();
+            if disk_mtime.is_some() && guard.settings.last_modified == disk_mtime {
+                return Ok(guard.settings.data.clone());
+            }
+        }
+
+        let mut guard = self.cache.write().unwrap();
+        let settings: Settings = Self::read_json_static(&self.data_dir, "settings.json")?;
+        guard.settings = CachedItem {
+            data: settings.clone(),
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+        Ok(settings)
     }
 
     pub fn update_settings(&self, mut settings: Settings) -> Result<Settings, AppError> {
-        let _guard = self.lock.write().unwrap();
-        let current_settings: Settings = self.read_json("settings.json")?;
+        let current_settings = self.get_settings()?;
 
         settings.created_at = current_settings.created_at;
         settings.updated_at = Utc::now().to_rfc3339();
 
         self.write_file("settings.json", &settings)?;
+
+        let file_path = self.data_dir.join("settings.json");
+        let mut guard = self.cache.write().unwrap();
+        guard.settings = CachedItem {
+            data: settings.clone(),
+            last_modified: Self::get_file_last_modified(&file_path),
+        };
+
         Ok(settings)
     }
 }

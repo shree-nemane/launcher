@@ -229,10 +229,29 @@ export function useLauncher(suggestions = [], onNavigate = null) {
 
       if (e.key === "Enter") {
         e.preventDefault();
+
+        const selected = suggestions.length > 0 ? suggestions[selectedIndex] : null;
+        if (selected) {
+          if (selected.kind === "system") {
+            handleSelectSuggestion(selected);
+            return;
+          }
+
+          const tokens = input.trim().split(/\s+/).filter(Boolean);
+          if (tokens.length <= 1) {
+            execute(selected.command);
+            return;
+          } else {
+            const updated = applySuggestionToInput(input, selected.command);
+            execute(updated);
+            return;
+          }
+        }
+
         execute();
       }
     },
-    [isExecuting, suggestions, selectedIndex, handleSelectSuggestion, execute]
+    [isExecuting, suggestions, selectedIndex, input, handleSelectSuggestion, execute]
   );
 
   const handleClearInput = useCallback(() => {

@@ -1,4 +1,4 @@
-use tauri::WebviewWindow;
+use tauri::{Emitter, WebviewWindow};
 
 #[tauri::command]
 pub async fn pick_folder(window: WebviewWindow) -> Result<Option<String>, String> {
@@ -29,7 +29,11 @@ pub async fn pick_executable(window: WebviewWindow) -> Result<Option<String>, St
 
 #[tauri::command]
 pub fn hide_launcher(window: WebviewWindow) -> Result<(), String> {
-    window.hide().map_err(|e| e.to_string())
+    let _ = window.emit("launcher://hide", ());
+    let res = window.hide().map_err(|e| e.to_string());
+    crate::window_manager::suspend_webview(&window);
+    crate::window_manager::trim_process_memory();
+    res
 }
 
 #[tauri::command]

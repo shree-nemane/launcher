@@ -5,6 +5,19 @@ import { VariableChips } from "./VariableChips";
 import { useApplicationForm } from "../../hooks/useApplicationForm";
 import { AppIcon, AlertIcon, CloseIcon } from "../Launcher/Icons";
 
+const PRESETS = [
+  {
+    label: "Windows Terminal",
+    name: "Windows Terminal",
+    command: "/wt",
+    executablePath: "wt.exe",
+    normalArguments: [],
+    projectLaunchEnabled: true,
+    projectArguments: ["-d", "{PROJECT_PATH}"],
+    workingDirectory: "",
+  },
+];
+
 export function AppFormView({ initialData = null, onCancel, onSuccess }) {
   const nameInputRef = useRef(null);
   const projectArgsRef = useRef(null);
@@ -15,6 +28,7 @@ export function AppFormView({ initialData = null, onCancel, onSuccess }) {
     errors,
     isSaving,
     handleChange,
+    applyPreset,
     handleBrowseExecutable,
     handleSave,
   } = useApplicationForm({ initialData, onSuccess });
@@ -37,6 +51,23 @@ export function AppFormView({ initialData = null, onCancel, onSuccess }) {
     projectArgsRef.current?.insertVariable(varText);
   };
 
+  const lowerExe = formData.executablePath.toLowerCase();
+  const isTerminal =
+    lowerExe.includes("pwsh") ||
+    lowerExe.includes("powershell") ||
+    lowerExe.includes("cmd");
+  const hasProjectPathInTerminal =
+    isTerminal &&
+    formData.projectArguments?.some((a) => a.includes("{PROJECT_PATH}"));
+
+  const handleFixTerminalArgs = () => {
+    if (lowerExe.includes("cmd")) {
+      handleChange("projectArguments", ["/k"]);
+    } else {
+      handleChange("projectArguments", ["-NoExit"]);
+    }
+  };
+
   const title = mode === "edit" ? "Edit Application" : "Add Application";
 
   return (
@@ -45,7 +76,7 @@ export function AppFormView({ initialData = null, onCancel, onSuccess }) {
       className="flex flex-col max-h-[420px] overflow-hidden text-neutral-100"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-800/80 bg-neutral-950/80">
+      <div data-tauri-drag-region className="flex items-center justify-between px-5 py-3 border-b border-neutral-800/80 bg-neutral-950/80 cursor-default">
         <div className="flex items-center space-x-2.5">
           <button
             type="button"
@@ -76,6 +107,32 @@ export function AppFormView({ initialData = null, onCancel, onSuccess }) {
 
       {/* Form Content */}
       <div className="p-5 space-y-4 overflow-y-auto max-h-[310px]">
+        {/* Quick Presets Bar (Create Mode) */}
+        {mode === "create" && (
+          <div className="space-y-1.5">
+            <span className="text-[10px] text-neutral-500 uppercase tracking-wider font-semibold block">
+              Quick Setup Preset:
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => applyPreset(preset)}
+                  className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-[11px] text-neutral-300 transition-colors cursor-pointer flex items-center space-x-1.5"
+                >
+                  <span className="font-medium text-neutral-200">
+                    {preset.label}
+                  </span>
+                  <span className="font-mono text-[10px] text-blue-400">
+                    {preset.command}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {errors.general && (
           <div
             role="alert"
@@ -114,11 +171,16 @@ export function AppFormView({ initialData = null, onCancel, onSuccess }) {
           </FormField>
         </div>
 
-        <FormField label="Executable Path" required error={errors.executablePath}>
+        <FormField
+          label="Executable Path"
+          required
+          helper="Click Browse to select the application's .exe file"
+          error={errors.executablePath}
+        >
           <div className="flex items-center space-x-2">
             <input
               type="text"
-              placeholder="C:\Program Files\Microsoft VS Code\Code.exe"
+              placeholder="Click Browse to select .exe (e.g. Code.exe)"
               value={formData.executablePath}
               onChange={(e) => handleChange("executablePath", e.target.value)}
               className="flex-1 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-blue-500/70 font-mono truncate"
@@ -126,10 +188,10 @@ export function AppFormView({ initialData = null, onCancel, onSuccess }) {
             <button
               type="button"
               onClick={handleBrowseExecutable}
-              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-200 transition-colors cursor-pointer shrink-0 border border-neutral-700"
+              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white transition-colors cursor-pointer shrink-0 shadow-sm"
             >
-              <AppIcon className="w-3.5 h-3.5 text-neutral-400" />
-              <span>Browse</span>
+              <AppIcon className="w-3.5 h-3.5 text-blue-100" />
+              <span>Browse .exe</span>
             </button>
           </div>
         </FormField>
@@ -140,7 +202,7 @@ export function AppFormView({ initialData = null, onCancel, onSuccess }) {
           helper="Optional"
           argumentsList={formData.normalArguments}
           onChange={(args) => handleChange("normalArguments", args)}
-          placeholder="e.g. --new-window"
+          placeholder="e.g. -NoExit or --new-window"
         />
 
         {/* Project Launch Section */}
@@ -169,12 +231,35 @@ export function AppFormView({ initialData = null, onCancel, onSuccess }) {
 
           {formData.projectLaunchEnabled && (
             <div className="space-y-3 pt-2 border-t border-neutral-800/60">
+              {/* Terminal Argument Warning & 1-Click Fix Banner */}
+              {hasProjectPathInTerminal && (
+                <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-800/70 text-amber-200 text-xs">
+                  <div className="flex items-start justify-between">
+                    <div className="pr-2">
+                      <span className="font-semibold block text-amber-300">
+                        💡 Note for Terminals:
+                      </span>
+                      <span className="text-[11px] text-amber-200/90 leading-tight block mt-0.5">
+                        Terminals automatically open inside the project folder. Passing <code className="bg-amber-900/60 px-1 rounded">{"{PROJECT_PATH}"}</code> causes PowerShell to treat the path as a script.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleFixTerminalArgs}
+                      className="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded text-[10px] shrink-0 cursor-pointer shadow-sm"
+                    >
+                      Fix: Use {lowerExe.includes("cmd") ? "/k" : "-NoExit"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <ArgumentsEditor
                 ref={projectArgsRef}
                 title="Project Launch Arguments"
                 argumentsList={formData.projectArguments}
                 onChange={(args) => handleChange("projectArguments", args)}
-                placeholder="e.g. {PROJECT_PATH}"
+                placeholder="e.g. {PROJECT_PATH} or -NoExit"
               />
 
               <VariableChips onInsert={handleInsertVariable} />

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { CloseIcon, SearchIcon, FolderIcon, AppIcon, GroupIcon, HelpIcon } from "../Launcher/Icons";
+import { CloseIcon, SearchIcon, HelpIcon } from "../Launcher/Icons";
 
 export function HelpView({ onCancel }) {
   const [activeTab, setActiveTab] = useState("all");
@@ -16,96 +16,103 @@ export function HelpView({ onCancel }) {
     {
       id: "quickstart",
       category: "syntax",
-      title: "Core Launch Syntax",
+      title: "1. Core Launch Syntax",
       items: [
         {
           syntax: "<project>",
           example: "goofies",
           description: "Opens the project folder in Windows File Explorer.",
-          tag: "Explorer",
+          tag: "File Explorer",
           tagColor: "bg-amber-950/60 border-amber-800/80 text-amber-300",
         },
         {
           syntax: "<project> /run",
           example: "goofies /run",
-          description: "Spawns all configured Run Commands (e.g. npm run dev) in PowerShell 7 (pwsh).",
+          description: "Runs all project startup commands (e.g. npm run dev) in PowerShell 7 (pwsh).",
           tag: "PowerShell 7",
           tagColor: "bg-blue-950/60 border-blue-800/80 text-blue-300",
         },
         {
           syntax: "<project> /<app>",
           example: "goofies /v",
-          description: "Opens the project inside the specified application (e.g., VS Code).",
+          description: "Opens the project in your chosen app (e.g. /v for VS Code, /wt for Windows Terminal).",
           tag: "App Context",
           tagColor: "bg-indigo-950/60 border-indigo-800/80 text-indigo-300",
         },
         {
           syntax: "<project> /v /run",
           example: "goofies /v /run",
-          description: "Launches VS Code AND starts the dev server in PowerShell 7 simultaneously.",
+          description: "Opens VS Code AND starts your development server in PowerShell 7 together.",
           tag: "Multi-Action",
           tagColor: "bg-emerald-950/60 border-emerald-800/80 text-emerald-300",
         },
         {
           syntax: "<project> //",
           example: "goofies //",
-          description: "Opens the project across all applications in your Default Development Group.",
-          tag: "Default Group",
+          description: "Opens the project across all apps in your Default Workspace Group in order.",
+          tag: "Workspace Group",
           tagColor: "bg-purple-950/60 border-purple-800/80 text-purple-300",
         },
         {
           syntax: "//",
           example: "//",
-          description: "Launches all tools in your Default Workspace Group standalone without project context.",
+          description: "Launches all tools in your Default Workspace Group standalone without a project.",
           tag: "Standalone Group",
           tagColor: "bg-purple-950/60 border-purple-800/80 text-purple-300",
+        },
+        {
+          syntax: "/<app>",
+          example: "/v or /wt",
+          description: "Launches an application standalone without any project context.",
+          tag: "Standalone App",
+          tagColor: "bg-neutral-800 border-neutral-700 text-neutral-300",
         },
       ],
     },
     {
       id: "management",
       category: "management",
-      title: "System Management Commands",
+      title: "2. System & Management Commands",
       items: [
         {
           syntax: "add-project",
           example: "add-project",
-          description: "Register a new project with directory, URL, and Run Commands (npm run dev, python, etc.).",
+          description: "Register a new project with directory, URL, and Run Commands (npm run dev, etc.).",
           tag: "Projects",
           tagColor: "bg-amber-950/60 border-amber-800/80 text-amber-300",
         },
         {
           syntax: "manage-projects",
           example: "manage-projects",
-          description: "Browse, filter, edit settings, or remove registered projects.",
+          description: "Browse, search, edit configuration, or delete existing registered projects.",
           tag: "Projects",
           tagColor: "bg-amber-950/60 border-amber-800/80 text-amber-300",
         },
         {
           syntax: "add-app",
           example: "add-app",
-          description: "Register an application (VS Code, PowerShell, Terminal, Browser) with custom arguments.",
+          description: "Register a tool or application (VS Code, Cursor, Windows Terminal, Chrome).",
           tag: "Apps",
           tagColor: "bg-blue-950/60 border-blue-800/80 text-blue-300",
         },
         {
           syntax: "manage-apps",
           example: "manage-apps",
-          description: "Browse and edit registered applications, flags, and project-aware launch arguments.",
+          description: "Browse, edit flags, and customize arguments for registered applications.",
           tag: "Apps",
           tagColor: "bg-blue-950/60 border-blue-800/80 text-blue-300",
         },
         {
           syntax: "add-group",
           example: "add-group",
-          description: "Create an application group and customize its launch sequence.",
+          description: "Create an application group and arrange its exact launch sequence.",
           tag: "Groups",
           tagColor: "bg-purple-950/60 border-purple-800/80 text-purple-300",
         },
         {
           syntax: "manage-groups",
           example: "manage-groups",
-          description: "Manage groups and assign which group is activated by the '//' workspace shortcut.",
+          description: "Manage groups and choose which group is launched by the '//' shortcut.",
           tag: "Groups",
           tagColor: "bg-purple-950/60 border-purple-800/80 text-purple-300",
         },
@@ -116,46 +123,74 @@ export function HelpView({ onCancel }) {
           tag: "Help",
           tagColor: "bg-neutral-800 border-neutral-700 text-neutral-300",
         },
+      ],
+    },
+    {
+      id: "terminals",
+      category: "terminals",
+      title: "3. Terminal & App Argument Rules",
+      items: [
         {
-          syntax: "settings",
-          example: "settings",
-          description: "Configure system startup autostart, global summon hotkey, and default group.",
-          tag: "Settings",
+          syntax: "Code Editors (VS Code / Cursor)",
+          example: 'Code.exe "{PROJECT_PATH}"',
+          description: "Editors NEED {PROJECT_PATH} in Project Arguments so the editor opens that workspace folder.",
+          tag: "Editors",
+          tagColor: "bg-blue-950/60 border-blue-800/80 text-blue-300",
+        },
+        {
+          syntax: "Windows Terminal (wt.exe)",
+          example: 'wt.exe -d "{PROJECT_PATH}"',
+          description: "Windows Terminal uses -d to set its starting directory to the project folder.",
+          tag: "Windows Terminal",
+          tagColor: "bg-indigo-950/60 border-indigo-800/80 text-indigo-300",
+        },
+        {
+          syntax: "PowerShell (pwsh.exe / powershell.exe)",
+          example: "pwsh.exe -NoExit",
+          description: "Do NOT pass {PROJECT_PATH} to PowerShell directly. The launcher sets working directory automatically; use -NoExit to stay open.",
+          tag: "PowerShell",
           tagColor: "bg-emerald-950/60 border-emerald-800/80 text-emerald-300",
+        },
+        {
+          syntax: "Web Browsers (Chrome / Edge / Brave)",
+          example: 'chrome.exe "{PROJECT_URL}"',
+          description: "Browsers use {PROJECT_URL} to navigate directly to your local or remote dev URL.",
+          tag: "Browser",
+          tagColor: "bg-cyan-950/60 border-cyan-800/80 text-cyan-300",
         },
       ],
     },
     {
       id: "variables",
       category: "variables",
-      title: "App Argument Interpolation Variables",
+      title: "4. Template Variables",
       items: [
         {
           syntax: "{PROJECT_PATH}",
           example: 'e.g. Code.exe "{PROJECT_PATH}"',
-          description: "Replaced with the project's absolute folder path on disk.",
-          tag: "Variable",
+          description: "Replaced with the project's absolute folder path (e.g. E:\\myproject).",
+          tag: "Path",
           tagColor: "bg-cyan-950/60 border-cyan-800/80 text-cyan-300",
         },
         {
           syntax: "{PROJECT_URL}",
           example: 'e.g. chrome.exe "{PROJECT_URL}"',
           description: "Replaced with the project's web URL (e.g. http://localhost:3000).",
-          tag: "Variable",
+          tag: "URL",
           tagColor: "bg-cyan-950/60 border-cyan-800/80 text-cyan-300",
         },
         {
           syntax: "{PROJECT_NAME}",
           example: 'e.g. wt.exe --title "{PROJECT_NAME}"',
-          description: "Replaced with the human-readable project title.",
-          tag: "Variable",
+          description: "Replaced with the project's human-readable title.",
+          tag: "Name",
           tagColor: "bg-cyan-950/60 border-cyan-800/80 text-cyan-300",
         },
         {
           syntax: "{PROJECT_COMMAND}",
           example: "e.g. {PROJECT_COMMAND}",
-          description: "Replaced with the project's shortcut command slug.",
-          tag: "Variable",
+          description: "Replaced with the project's shortcut command alias.",
+          tag: "Alias",
           tagColor: "bg-cyan-950/60 border-cyan-800/80 text-cyan-300",
         },
       ],
@@ -163,40 +198,40 @@ export function HelpView({ onCancel }) {
     {
       id: "shortcuts",
       category: "shortcuts",
-      title: "Keyboard Shortcuts",
+      title: "5. Keyboard Shortcuts",
       items: [
         {
           syntax: "Alt + Space",
           example: "Alt + Space",
-          description: "Toggle launcher window from anywhere in Windows (customizable).",
+          description: "Toggle launcher window from anywhere in Windows.",
           tag: "Global",
           tagColor: "bg-rose-950/60 border-rose-800/80 text-rose-300",
         },
         {
           syntax: "Tab",
           example: "Tab",
-          description: "Autocomplete selected suggestion in search bar.",
+          description: "Autocomplete selected suggestion into the search box.",
           tag: "Navigation",
           tagColor: "bg-neutral-800 border-neutral-700 text-neutral-300",
         },
         {
           syntax: "↑ / ↓ Arrows",
           example: "Up / Down",
-          description: "Navigate up and down through matching suggestions.",
+          description: "Navigate up and down through matching autocomplete suggestions.",
           tag: "Navigation",
           tagColor: "bg-neutral-800 border-neutral-700 text-neutral-300",
         },
         {
           syntax: "Ctrl + Enter",
           example: "Ctrl + Enter",
-          description: "Save form changes in Add/Edit Project, App, or Group views.",
+          description: "Instantly save form changes in Add/Edit Project, App, or Group views.",
           tag: "Form",
           tagColor: "bg-neutral-800 border-neutral-700 text-neutral-300",
         },
         {
           syntax: "Esc",
           example: "Esc",
-          description: "Close launcher or return to search bar from any sub-view.",
+          description: "Close launcher or return to search view from any sub-view.",
           tag: "Navigation",
           tagColor: "bg-neutral-800 border-neutral-700 text-neutral-300",
         },
@@ -227,7 +262,7 @@ export function HelpView({ onCancel }) {
       className="flex flex-col max-h-[420px] overflow-hidden text-neutral-100"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-800/80 bg-neutral-950/80">
+      <div data-tauri-drag-region className="flex items-center justify-between px-5 py-3 border-b border-neutral-800/80 bg-neutral-950/80 cursor-default">
         <div className="flex items-center space-x-2.5">
           <button
             type="button"
@@ -240,7 +275,7 @@ export function HelpView({ onCancel }) {
           <div className="flex items-center space-x-2">
             <HelpIcon className="w-4 h-4 text-blue-400" />
             <h2 className="text-sm font-semibold text-neutral-100">
-              Universal Launcher &bull; Help & Quickstart
+              Universal Launcher &bull; Quickstart Guide
             </h2>
           </div>
         </div>
@@ -275,6 +310,7 @@ export function HelpView({ onCancel }) {
             { id: "all", label: "All" },
             { id: "syntax", label: "Syntax" },
             { id: "management", label: "Commands" },
+            { id: "terminals", label: "Terminals" },
             { id: "variables", label: "Variables" },
             { id: "shortcuts", label: "Shortcuts" },
           ].map((tab) => (
@@ -298,7 +334,7 @@ export function HelpView({ onCancel }) {
       <div className="p-4 space-y-4 overflow-y-auto max-h-[295px]">
         {filteredSections.length === 0 ? (
           <div className="text-center py-8 text-xs text-neutral-500">
-            No help topics match "{searchFilter}".
+            No topics match "{searchFilter}".
           </div>
         ) : (
           filteredSections.map((sec) => (
@@ -347,7 +383,7 @@ export function HelpView({ onCancel }) {
 
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-2 border-t border-neutral-800/80 bg-neutral-950/90 text-[11px] text-neutral-500">
-        <span>Press <kbd className="px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-neutral-400 font-mono text-[10px]">Alt + Space</kbd> to toggle launcher</span>
+        <span>Press <kbd className="px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-neutral-400 font-mono text-[10px]">Alt + Space</kbd> to summon launcher</span>
         <span>esc to return</span>
       </div>
     </div>
