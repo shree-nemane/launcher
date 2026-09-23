@@ -1,6 +1,6 @@
 import React from "react";
 
-export function ShortcutFooter({ onOpenHelp }) {
+export function ShortcutFooter({ onOpenHelp, onOpenManage, onOpenSettings }) {
   return (
     <div
       data-tauri-drag-region
@@ -30,6 +30,28 @@ export function ShortcutFooter({ onOpenHelp }) {
       </div>
 
       <div className="flex items-center space-x-2.5">
+        <button
+          type="button"
+          onClick={onOpenManage}
+          className="flex items-center space-x-1 text-neutral-400 hover:text-indigo-300 transition-colors cursor-pointer"
+        >
+          <kbd className="px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-neutral-400 font-mono text-[10px]">
+            manage
+          </kbd>
+          <span>Manage</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="flex items-center space-x-1 text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer"
+        >
+          <kbd className="px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-neutral-400 font-mono text-[10px]">
+            config
+          </kbd>
+          <span>Settings</span>
+        </button>
+
         <button
           type="button"
           onClick={onOpenHelp}

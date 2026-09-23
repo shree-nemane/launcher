@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { launcherService } from "../../services/launcherService";
 import { SystemIcon, CloseIcon, AlertIcon } from "../Launcher/Icons";
+import { ConfigNavTabs } from "./ConfigNavTabs";
 
-export function SettingsView({ onCancel, onSaved }) {
+export function SettingsView({ onCancel, onSaved, onNavigate }) {
   const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [globalShortcut, setGlobalShortcut] = useState("Alt+Space");
   const [defaultGroupId, setDefaultGroupId] = useState("");
@@ -128,6 +129,8 @@ export function SettingsView({ onCancel, onSaved }) {
           <CloseIcon className="w-4 h-4" />
         </button>
       </div>
+
+      <ConfigNavTabs activeTab="settings" onNavigate={onNavigate} />
 
       {/* Notice & Error */}
       {notice && (

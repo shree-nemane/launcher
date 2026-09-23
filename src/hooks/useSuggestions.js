@@ -119,11 +119,38 @@ export function useSuggestions(input) {
     const existingTokens = prefix
       .trim()
       .split(/\s+/)
+      .filter(Boolean)
       .map((t) => t.toLowerCase());
 
     if (!hasInput) {
-      // Empty input -> Helpful top cues
+      // Empty input -> Display all projects, applications, workspace group, and manage commands
       const initial = [];
+
+      // 1. All configured Projects
+      for (const proj of projects) {
+        initial.push({
+          id: proj.id,
+          kind: "project",
+          command: proj.command,
+          name: proj.name,
+          description: proj.path,
+        });
+      }
+
+      // 2. All configured Applications
+      for (const app of applications) {
+        initial.push({
+          id: app.id,
+          kind: "app",
+          command: app.command,
+          name: app.name,
+          description: app.projectLaunch?.enabled
+            ? "Open in project context"
+            : "Launch application",
+        });
+      }
+
+      // 3. Default Workspace group (if configured)
       if (hasDefaultGroup) {
         initial.push({
           id: "group_default",
@@ -133,28 +160,48 @@ export function useSuggestions(input) {
           description: "Launch configured application group",
         });
       }
-      for (const app of applications.slice(0, 2)) {
+
+      // 4. System & Management commands
+      for (const sysCmd of SYSTEM_COMMANDS) {
         initial.push({
-          id: app.id,
-          kind: "app",
-          command: app.command,
-          name: app.name,
-          description: "Open application",
+          ...sysCmd,
         });
       }
-      for (const proj of projects.slice(0, 2)) {
-        initial.push({
-          id: proj.id,
-          kind: "project",
-          command: proj.command,
-          name: proj.name,
-          description: "Open project folder",
-        });
-      }
-      return initial.slice(0, 5);
+
+      return initial;
     }
 
     const scoredResults = [];
+
+    // System commands matching (when not in project launch prefix context)
+    if (existingTokens.length === 0) {
+      for (const sysCmd of SYSTEM_COMMANDS) {
+        const slashCmd = `/${sysCmd.command}`;
+        const cmdScore = Math.max(
+          getMatchScore(sysCmd.command, tokenLower),
+          getMatchScore(slashCmd, tokenLower),
+          getMatchScore(sysCmd.command, tokenLower.replace("/", ""))
+        );
+        const nameScore = getMatchScore(sysCmd.name, tokenLower.replace("/", ""));
+        let keywordScore = 0;
+        for (const kw of sysCmd.keywords) {
+          const cleanToken = tokenLower.replace("/", "");
+          if (kw.startsWith(cleanToken)) {
+            keywordScore = Math.max(keywordScore, 70);
+          } else if (kw.includes(cleanToken)) {
+            keywordScore = Math.max(keywordScore, 40);
+          }
+        }
+
+        const maxScore = Math.max(cmdScore, nameScore, keywordScore);
+        if (maxScore > 0) {
+          scoredResults.push({
+            ...sysCmd,
+            score: maxScore,
+          });
+        }
+      }
+    }
 
     if (isSlash || existingTokens.length > 0) {
       const isPostTokenEmpty = existingTokens.length > 0 && tokenLower === "";
@@ -231,28 +278,7 @@ export function useSuggestions(input) {
         }
       }
     } else {
-      // User is typing a system command or project name
-      for (const sysCmd of SYSTEM_COMMANDS) {
-        const cmdScore = getMatchScore(sysCmd.command, tokenLower);
-        const nameScore = getMatchScore(sysCmd.name, tokenLower);
-        let keywordScore = 0;
-        for (const kw of sysCmd.keywords) {
-          if (kw.startsWith(tokenLower)) {
-            keywordScore = Math.max(keywordScore, 70);
-          } else if (kw.includes(tokenLower)) {
-            keywordScore = Math.max(keywordScore, 40);
-          }
-        }
-
-        const maxScore = Math.max(cmdScore, nameScore, keywordScore);
-        if (maxScore > 0) {
-          scoredResults.push({
-            ...sysCmd,
-            score: maxScore,
-          });
-        }
-      }
-
+      // User is typing without slash: match projects and applications
       for (const proj of projects) {
         const cmdScore = getMatchScore(proj.command, tokenLower);
         const nameScore = getMatchScore(proj.name, tokenLower);
@@ -269,12 +295,31 @@ export function useSuggestions(input) {
           });
         }
       }
+
+      for (const app of applications) {
+        const cmdScore = getMatchScore(app.command.replace("/", ""), tokenLower);
+        const nameScore = getMatchScore(app.name, tokenLower);
+        const maxScore = Math.max(cmdScore, nameScore);
+
+        if (maxScore > 0) {
+          scoredResults.push({
+            id: app.id,
+            kind: "app",
+            command: app.command,
+            name: app.name,
+            description: app.projectLaunch?.enabled
+              ? "Open in project context"
+              : "Launch application",
+            score: maxScore - 5,
+          });
+        }
+      }
     }
 
     // Sort descending by score, maintaining stable ordering for ties
     scoredResults.sort((a, b) => b.score - a.score);
 
-    return scoredResults.slice(0, 5);
+    return scoredResults.slice(0, 20);
   }, [input, projects, applications, hasDefaultGroup]);
 
   return { suggestions, isLoading, reloadSuggestions: loadMetadata };

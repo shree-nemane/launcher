@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from "react";
+import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useSuggestions } from "./hooks/useSuggestions";
 import { useLauncher } from "./hooks/useLauncher";
@@ -58,11 +58,12 @@ function App() {
   const [editingProject, setEditingProject] = useState(null);
   const [editingApp, setEditingApp] = useState(null);
   const [editingGroup, setEditingGroup] = useState(null);
-  const [transientInput, setTransientInput] = useState("");
-  const { suggestions, reloadSuggestions } = useSuggestions(transientInput);
+  const [input, setInput] = useState("");
+  const { suggestions, reloadSuggestions } = useSuggestions(input);
 
   const activeViewRef = useRef(activeView);
   activeViewRef.current = activeView;
+  const lastShowTimeRef = useRef(Date.now());
 
   const navigateTo = (view) => {
     setPreviousView(activeView);
@@ -109,24 +110,18 @@ function App() {
   }, [activeView, previousView]);
 
   const {
-    input,
     inputRef,
     selectedIndex,
     isExecuting,
     error,
     resetState,
-    handleInputChange: onInputChangeRaw,
+    handleInputChange,
     handleClearInput,
     handleKeyDown,
     handleSelectSuggestion,
     handleHoverSuggestion,
     handleClose,
-  } = useLauncher(suggestions, navigateTo);
-
-  const handleInputChange = (e) => {
-    onInputChangeRaw(e);
-    setTransientInput(e.target.value);
-  };
+  } = useLauncher(suggestions, navigateTo, input, setInput);
 
   // Auto-focus search bar whenever returning to launcher view
   useEffect(() => {
@@ -148,16 +143,10 @@ function App() {
     let unlistenShortcut;
     let unlistenFocus;
 
-    const handleWindowBlur = () => {
-      if (activeViewRef.current === "launcher") {
-        launcherService.hideLauncher();
-      }
-    };
-    window.addEventListener("blur", handleWindowBlur);
-
     async function registerListeners() {
       try {
         unlistenShow = await listen("launcher://show", () => {
+          lastShowTimeRef.current = Date.now();
           setIsWindowVisible(true);
           setActiveView("launcher");
           resetState();
@@ -178,6 +167,7 @@ function App() {
 
         unlistenNav = await listen("launcher://navigate", (event) => {
           if (event.payload) {
+            lastShowTimeRef.current = Date.now();
             setIsWindowVisible(true);
             setActiveView(event.payload);
           }
@@ -192,7 +182,11 @@ function App() {
         });
 
         unlistenFocus = await listen("launcher://focus-changed", (event) => {
-          if (!event.payload && activeViewRef.current === "launcher") {
+          if (
+            !event.payload &&
+            activeViewRef.current === "launcher" &&
+            Date.now() - lastShowTimeRef.current > 300
+          ) {
             launcherService.hideLauncher();
           }
         });
@@ -204,7 +198,6 @@ function App() {
     registerListeners();
 
     return () => {
-      window.removeEventListener("blur", handleWindowBlur);
       if (unlistenShow) unlistenShow();
       if (unlistenHide) unlistenHide();
       if (unlistenNav) unlistenNav();
@@ -277,6 +270,8 @@ function App() {
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
                   onClear={handleClearInput}
+                  onOpenManage={() => navigateTo("manageProjects")}
+                  onOpenSettings={() => navigateTo("settings")}
                   onOpenHelp={() => navigateTo("help")}
                   onClose={handleClose}
                 />
@@ -305,7 +300,11 @@ function App() {
                   />
                 )}
 
-                <ShortcutFooter onOpenHelp={() => navigateTo("help")} />
+                <ShortcutFooter
+                  onOpenManage={() => navigateTo("manageProjects")}
+                  onOpenSettings={() => navigateTo("settings")}
+                  onOpenHelp={() => navigateTo("help")}
+                />
               </>
             )}
 
@@ -342,6 +341,7 @@ function App() {
                   onAddNew={() => navigateTo("addProject")}
                   onEdit={handleEditProject}
                   onDataChanged={handleDataChanged}
+                  onNavigate={navigateTo}
                 />
               )}
 
@@ -371,6 +371,7 @@ function App() {
                   onAddNew={() => navigateTo("addApp")}
                   onEdit={handleEditApp}
                   onDataChanged={handleDataChanged}
+                  onNavigate={navigateTo}
                 />
               )}
 
@@ -400,6 +401,7 @@ function App() {
                   onAddNew={() => navigateTo("addGroup")}
                   onEdit={handleEditGroup}
                   onDataChanged={handleDataChanged}
+                  onNavigate={navigateTo}
                 />
               )}
 
@@ -414,6 +416,7 @@ function App() {
                     reloadSuggestions();
                     setActiveView("launcher");
                   }}
+                  onNavigate={navigateTo}
                 />
               )}
             </Suspense>

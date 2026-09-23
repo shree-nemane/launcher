@@ -2,8 +2,10 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { launcherService } from "../services/launcherService";
 import { applySuggestionToInput } from "../utils/commandInput";
 
-export function useLauncher(suggestions = [], onNavigate = null) {
-  const [input, setInput] = useState("");
+export function useLauncher(suggestions = [], onNavigate = null, controlledInput = null, setControlledInput = null) {
+  const [internalInput, setInternalInput] = useState("");
+  const input = setControlledInput ? controlledInput : internalInput;
+  const setInput = setControlledInput || setInternalInput;
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isExecuting, setIsExecuting] = useState(false);
   const [error, setError] = useState(null);
@@ -42,49 +44,50 @@ export function useLauncher(suggestions = [], onNavigate = null) {
       if (isExecuting) return;
 
       if (suggestion.kind === "system" && onNavigate) {
-        if (suggestion.command === "add-project") {
+        const cmdName = suggestion.command.replace(/^\//, "");
+        if (cmdName === "add-project") {
           setInput("");
           setError(null);
           onNavigate("addProject");
           return;
         }
-        if (suggestion.command === "add-app") {
+        if (cmdName === "add-app") {
           setInput("");
           setError(null);
           onNavigate("addApp");
           return;
         }
-        if (suggestion.command === "manage-projects") {
+        if (cmdName === "manage-projects") {
           setInput("");
           setError(null);
           onNavigate("manageProjects");
           return;
         }
-        if (suggestion.command === "manage-apps") {
+        if (cmdName === "manage-apps") {
           setInput("");
           setError(null);
           onNavigate("manageApps");
           return;
         }
-        if (suggestion.command === "add-group") {
+        if (cmdName === "add-group") {
           setInput("");
           setError(null);
           onNavigate("addGroup");
           return;
         }
-        if (suggestion.command === "manage-groups") {
+        if (cmdName === "manage-groups") {
           setInput("");
           setError(null);
           onNavigate("manageGroups");
           return;
         }
-        if (suggestion.command === "help") {
+        if (cmdName === "help") {
           setInput("");
           setError(null);
           onNavigate("help");
           return;
         }
-        if (suggestion.command === "settings") {
+        if (cmdName === "settings" || cmdName === "config") {
           setInput("");
           setError(null);
           onNavigate("settings");
@@ -108,8 +111,28 @@ export function useLauncher(suggestions = [], onNavigate = null) {
     async (overrideInput) => {
       if (isExecuting) return;
 
-      const cmd = (overrideInput ?? input).trim();
-      if (!cmd) return;
+      const rawCmd = (overrideInput ?? input).trim();
+      if (!rawCmd) return;
+
+      let cmd = rawCmd;
+      if (cmd.startsWith("/") && !cmd.startsWith("//")) {
+        const stripped = cmd.slice(1);
+        if (
+          [
+            "manage-projects",
+            "manage-apps",
+            "manage-groups",
+            "add-project",
+            "add-app",
+            "add-group",
+            "settings",
+            "config",
+            "help",
+          ].includes(stripped)
+        ) {
+          cmd = stripped;
+        }
+      }
 
       setIsExecuting(true);
       setError(null);

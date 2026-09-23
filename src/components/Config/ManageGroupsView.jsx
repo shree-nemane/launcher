@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { launcherService } from "../../services/launcherService";
 import { GroupIcon, AppIcon, EditIcon, TrashIcon, SearchIcon, AlertIcon, CloseIcon } from "../Launcher/Icons";
+import { ConfigNavTabs } from "./ConfigNavTabs";
 
-export function ManageGroupsView({ onCancel, onAddNew, onEdit, onDataChanged }) {
+export function ManageGroupsView({ onCancel, onAddNew, onEdit, onDataChanged, onNavigate }) {
   const [groups, setGroups] = useState([]);
   const [applications, setApplications] = useState([]);
   const [defaultGroupId, setDefaultGroupId] = useState(null);
@@ -163,6 +164,8 @@ export function ManageGroupsView({ onCancel, onAddNew, onEdit, onDataChanged }) 
           </button>
         </div>
       </div>
+
+      <ConfigNavTabs activeTab="manageGroups" onNavigate={onNavigate} />
 
       {/* Search Filter */}
       <div className="px-5 py-2.5 border-b border-neutral-800/60 bg-neutral-900/40 flex items-center space-x-2">

@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { SearchIcon, CloseIcon, HelpIcon } from "./Icons";
+import { SearchIcon, CloseIcon, HelpIcon, FolderIcon, SystemIcon } from "./Icons";
 
 export function SearchBar({
   input,
@@ -9,6 +9,8 @@ export function SearchBar({
   onChange,
   onKeyDown,
   onClear,
+  onOpenManage,
+  onOpenSettings,
   onOpenHelp,
   onClose,
 }) {
@@ -75,6 +77,30 @@ export function SearchBar({
 
         {/* Subtle Divider */}
         <div className="w-[1px] h-4 bg-neutral-800/90" />
+
+        {/* Manage Button */}
+        <button
+          type="button"
+          onClick={onOpenManage}
+          aria-label="Manage projects and applications"
+          title="Manage Projects, Apps & Groups"
+          className="flex items-center space-x-1 px-2 py-1 rounded-md text-neutral-400 hover:text-indigo-300 hover:bg-neutral-800/70 transition-colors cursor-pointer text-xs font-medium"
+        >
+          <FolderIcon className="w-3.5 h-3.5" />
+          <span>Manage</span>
+        </button>
+
+        {/* Settings Button */}
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          aria-label="Settings"
+          title="Settings & Preferences"
+          className="flex items-center space-x-1 px-2 py-1 rounded-md text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/70 transition-colors cursor-pointer text-xs font-medium"
+        >
+          <SystemIcon className="w-3.5 h-3.5" />
+          <span>Settings</span>
+        </button>
 
         {/* Help Button (Takes minimal space) */}
         <button

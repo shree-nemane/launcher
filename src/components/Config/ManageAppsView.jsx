@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { launcherService } from "../../services/launcherService";
 import { AppIcon, EditIcon, TrashIcon, SearchIcon, AlertIcon, CloseIcon } from "../Launcher/Icons";
+import { ConfigNavTabs } from "./ConfigNavTabs";
 
-export function ManageAppsView({ onCancel, onAddNew, onEdit, onDataChanged }) {
+export function ManageAppsView({ onCancel, onAddNew, onEdit, onDataChanged, onNavigate }) {
   const [applications, setApplications] = useState([]);
   const [filterText, setFilterText] = useState("");
   const [appToDelete, setAppToDelete] = useState(null);
@@ -108,6 +109,8 @@ export function ManageAppsView({ onCancel, onAddNew, onEdit, onDataChanged }) {
           </button>
         </div>
       </div>
+
+      <ConfigNavTabs activeTab="manageApps" onNavigate={onNavigate} />
 
       {/* Search Filter */}
       <div className="px-5 py-2.5 border-b border-neutral-800/60 bg-neutral-900/40 flex items-center space-x-2">
