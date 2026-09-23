@@ -535,3 +535,47 @@ fn test_paths_with_spaces_and_special_chars() {
     assert!(Path::new(&exe_path).is_file());
     assert!(Path::new(&special_dir).is_dir());
 }
+
+#[test]
+fn test_powershell_work_dir_with_single_quotes() {
+    let temp_dir = tempdir().unwrap();
+    let special_dir = temp_dir.path().join("User's Project");
+    fs::create_dir(&special_dir).unwrap();
+
+    let (_dir, storage, _, _, _, _) = setup_test_environment();
+    storage
+        .create_project(Project {
+            id: "".to_string(),
+            name: "Quote Project".to_string(),
+            command: "quote".to_string(),
+            path: special_dir.to_str().unwrap().to_string(),
+            url: None,
+            run_commands: vec![RunCommand {
+                name: "Dev".to_string(),
+                command: "npm start".to_string(),
+            }],
+            working_directory: None,
+            created_at: "".to_string(),
+            updated_at: "".to_string(),
+        })
+        .unwrap();
+
+    let plan = plan_raw("quote /run", &storage).unwrap();
+    match plan {
+        ExecutionPlan::Launch { actions } => {
+            assert_eq!(actions.len(), 1);
+            match &actions[0] {
+                LaunchAction::Process { arguments, .. } => {
+                    #[cfg(target_os = "windows")]
+                    {
+                        let cmd_arg = &arguments[2];
+                        assert!(cmd_arg.contains("User''s Project"));
+                    }
+                }
+                _ => panic!("Expected Process action"),
+            }
+        }
+        _ => panic!("Expected ExecutionPlan::Launch"),
+    }
+}
+

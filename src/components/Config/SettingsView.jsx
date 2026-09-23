@@ -238,11 +238,14 @@ export function SettingsView({ onCancel, onSaved }) {
             className="w-full bg-neutral-950/90 border border-neutral-700/80 rounded-lg px-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
           >
             <option value="">-- No default group selected --</option>
-            {groups.map((grp) => (
-              <option key={grp.id} value={grp.id}>
-                {grp.name} ({grp.applicationIds.length} app{grp.applicationIds.length === 1 ? "" : "s"})
-              </option>
-            ))}
+            {groups.map((grp) => {
+              const appCount = (grp.applications || []).length;
+              return (
+                <option key={grp.id} value={grp.id}>
+                  {grp.name} ({appCount} app{appCount === 1 ? "" : "s"})
+                </option>
+              );
+            })}
           </select>
         </div>
       </div>

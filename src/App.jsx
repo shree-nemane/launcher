@@ -61,6 +61,9 @@ function App() {
   const [transientInput, setTransientInput] = useState("");
   const { suggestions, reloadSuggestions } = useSuggestions(transientInput);
 
+  const activeViewRef = useRef(activeView);
+  activeViewRef.current = activeView;
+
   const navigateTo = (view) => {
     setPreviousView(activeView);
     setActiveView(view);
@@ -143,6 +146,14 @@ function App() {
     let unlistenHide;
     let unlistenNav;
     let unlistenShortcut;
+    let unlistenFocus;
+
+    const handleWindowBlur = () => {
+      if (activeViewRef.current === "launcher") {
+        launcherService.hideLauncher();
+      }
+    };
+    window.addEventListener("blur", handleWindowBlur);
 
     async function registerListeners() {
       try {
@@ -179,6 +190,12 @@ function App() {
             setShortcutWarning(null);
           }
         });
+
+        unlistenFocus = await listen("launcher://focus-changed", (event) => {
+          if (!event.payload && activeViewRef.current === "launcher") {
+            launcherService.hideLauncher();
+          }
+        });
       } catch (e) {
         console.warn("Event listener registration failed (running outside Tauri?):", e);
       }
@@ -187,10 +204,12 @@ function App() {
     registerListeners();
 
     return () => {
+      window.removeEventListener("blur", handleWindowBlur);
       if (unlistenShow) unlistenShow();
       if (unlistenHide) unlistenHide();
       if (unlistenNav) unlistenNav();
       if (unlistenShortcut) unlistenShortcut();
+      if (unlistenFocus) unlistenFocus();
     };
   }, [resetState, inputRef]);
 

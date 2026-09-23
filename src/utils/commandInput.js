@@ -41,6 +41,9 @@ export function applySuggestionToInput(currentInput, suggestionCommand) {
 
   const lastSpaceIdx = currentInput.lastIndexOf(" ");
   if (lastSpaceIdx === -1) {
+    if (!currentInput.trim().startsWith("/") && suggestionCommand.startsWith("/")) {
+      return `${currentInput.trim()} ${suggestionCommand} `;
+    }
     return `${suggestionCommand} `;
   }
 

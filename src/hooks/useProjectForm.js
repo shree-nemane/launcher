@@ -90,9 +90,12 @@ export function useProjectForm({ initialData = null, onSuccess = null }) {
         workingDirectory: formData.workingDirectory.trim()
           ? formData.workingDirectory.trim()
           : null,
-        runCommands: formData.runCommands.filter(
-          (c) => c.name.trim() && c.command.trim()
-        ),
+        runCommands: formData.runCommands
+          .filter((c) => c?.command?.trim())
+          .map((c) => ({
+            name: c.name ? c.name.trim() : "",
+            command: c.command.trim(),
+          })),
         createdAt: initialData?.createdAt || "",
         updatedAt: initialData?.updatedAt || "",
       };

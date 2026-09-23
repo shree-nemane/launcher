@@ -156,23 +156,28 @@ export function useSuggestions(input) {
 
     const scoredResults = [];
 
-    if (isSlash) {
-      // User is typing an application or group slash command
-      if ("//".startsWith(tokenLower) && !existingTokens.includes("//")) {
+    if (isSlash || existingTokens.length > 0) {
+      const isPostTokenEmpty = existingTokens.length > 0 && tokenLower === "";
+
+      // User is typing an application or group slash command, or has typed a project and space
+      if (!existingTokens.includes("//") && hasDefaultGroup && (isPostTokenEmpty || "//".startsWith(tokenLower))) {
         scoredResults.push({
           id: "group_default",
           kind: "group",
           command: "//",
           name: "Default Workspace",
           description: "Launch default application group",
-          score: tokenLower === "//" ? 100 : 90,
+          score: isPostTokenEmpty ? 95 : (tokenLower === "//" ? 100 : 90),
         });
       }
 
       if (
-        ("/run".startsWith(tokenLower) || "/r".startsWith(tokenLower)) &&
         !existingTokens.includes("/run") &&
-        !existingTokens.includes("/r")
+        !existingTokens.includes("/r") &&
+        (isPostTokenEmpty ||
+          "/run".startsWith(tokenLower) ||
+          "/r".startsWith(tokenLower) ||
+          "run".startsWith(tokenLower))
       ) {
         scoredResults.push({
           id: "builtin_run_commands",
@@ -180,7 +185,9 @@ export function useSuggestions(input) {
           command: "/run",
           name: "Run Project Commands",
           description: "Execute configured project run commands / dev servers",
-          score: tokenLower === "/run" || tokenLower === "/r" ? 100 : 85,
+          score: isPostTokenEmpty
+            ? 90
+            : (tokenLower === "/run" || tokenLower === "/r" || tokenLower === "run" ? 100 : 85),
         });
       }
 
@@ -189,11 +196,7 @@ export function useSuggestions(input) {
           continue; // Skip already specified app
         }
 
-        const cmdScore = getMatchScore(app.command, tokenLower);
-        const nameScore = getMatchScore(app.name, tokenLower.replace("/", ""));
-        const maxScore = Math.max(cmdScore, nameScore);
-
-        if (maxScore > 0) {
+        if (isPostTokenEmpty) {
           scoredResults.push({
             id: app.id,
             kind: "app",
@@ -202,8 +205,29 @@ export function useSuggestions(input) {
             description: app.projectLaunch?.enabled
               ? "Open in project context"
               : "Launch application",
-            score: maxScore,
+            score: 80,
           });
+        } else {
+          const rawToken = tokenLower.startsWith("/") ? tokenLower : `/${tokenLower}`;
+          const cmdScore = Math.max(
+            getMatchScore(app.command, tokenLower),
+            getMatchScore(app.command, rawToken)
+          );
+          const nameScore = getMatchScore(app.name, tokenLower.replace("/", ""));
+          const maxScore = Math.max(cmdScore, nameScore);
+
+          if (maxScore > 0) {
+            scoredResults.push({
+              id: app.id,
+              kind: "app",
+              command: app.command,
+              name: app.name,
+              description: app.projectLaunch?.enabled
+                ? "Open in project context"
+                : "Launch application",
+              score: maxScore,
+            });
+          }
         }
       }
     } else {

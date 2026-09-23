@@ -40,8 +40,8 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = window.emit("launcher://hide", ());
                 let _ = window.hide();
@@ -50,6 +50,10 @@ pub fn run() {
                 }
                 window_manager::trim_process_memory();
             }
+            tauri::WindowEvent::Focused(focused) => {
+                let _ = window.emit("launcher://focus-changed", focused);
+            }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             commands::storage_commands::get_projects,

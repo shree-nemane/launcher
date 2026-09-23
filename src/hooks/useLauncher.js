@@ -238,7 +238,14 @@ export function useLauncher(suggestions = [], onNavigate = null) {
           }
 
           const tokens = input.trim().split(/\s+/).filter(Boolean);
-          if (tokens.length <= 1) {
+          const isProjectLaunchWithApp =
+            input.endsWith(" ") ||
+            (tokens.length === 1 &&
+              !tokens[0].startsWith("/") &&
+              tokens[0] !== "//" &&
+              (selected.kind === "app" || selected.kind === "group"));
+
+          if (tokens.length <= 1 && !isProjectLaunchWithApp) {
             execute(selected.command);
             return;
           } else {

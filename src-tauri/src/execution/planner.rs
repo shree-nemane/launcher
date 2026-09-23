@@ -43,13 +43,14 @@ fn create_run_command_actions(proj: &Project) -> Vec<LaunchAction> {
         #[cfg(target_os = "windows")]
         {
             let ps_exe = detect_powershell_executable();
+            let escaped_dir = work_dir.replace('\'', "''");
             actions.push(LaunchAction::Process {
                 name: title.clone(),
                 executable_path: ps_exe.to_string(),
                 arguments: vec![
                     "-NoExit".to_string(),
                     "-Command".to_string(),
-                    format!("Set-Location '{}'; {}", work_dir, cmd.command),
+                    format!("Set-Location '{}'; {}", escaped_dir, cmd.command),
                 ],
                 working_directory: Some(work_dir.to_string()),
             });
@@ -157,13 +158,14 @@ pub fn plan(resolved: &ResolvedCommand) -> Result<ExecutionPlan, PlanningError> 
                             #[cfg(target_os = "windows")]
                             {
                                 let ps_exe = detect_powershell_executable();
+                                let escaped_dir = work_dir.replace('\'', "''");
                                 actions.push(LaunchAction::Process {
                                     name: format!("{}: PowerShell", proj.name),
                                     executable_path: ps_exe.to_string(),
                                     arguments: vec![
                                         "-NoExit".to_string(),
                                         "-Command".to_string(),
-                                        format!("Set-Location '{}'", work_dir),
+                                        format!("Set-Location '{}'", escaped_dir),
                                     ],
                                     working_directory: Some(work_dir.to_string()),
                                 });
