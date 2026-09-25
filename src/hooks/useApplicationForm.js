@@ -16,6 +16,7 @@ export function useApplicationForm({ initialData = null, onSuccess = null }) {
 
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   useEffect(() => {
     if (initialData) {
@@ -104,7 +105,7 @@ export function useApplicationForm({ initialData = null, onSuccess = null }) {
   };
 
   const handleSave = useCallback(async () => {
-    if (isSaving) return;
+    if (isSavingRef.current || isSaving) return;
 
     const frontendErrors = validateFrontend();
     if (Object.keys(frontendErrors).length > 0) {
@@ -112,6 +113,7 @@ export function useApplicationForm({ initialData = null, onSuccess = null }) {
       return;
     }
 
+    isSavingRef.current = true;
     setIsSaving(true);
     setErrors({});
 
@@ -156,6 +158,7 @@ export function useApplicationForm({ initialData = null, onSuccess = null }) {
       }
       setErrors({ general: msg });
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   }, [formData, isSaving, initialData, mode, onSuccess]);

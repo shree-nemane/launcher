@@ -16,6 +16,7 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
   const [isDefault, setIsDefault] = useState(false);
   const [availableApps, setAvailableApps] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
 
   const handleKeyDown = (e) => {
     if (e.key === "Escape") {
+      if (isSaving) return;
       e.preventDefault();
       onCancel();
     } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -81,6 +83,8 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
   };
 
   const handleSave = async () => {
+    if (isSavingRef.current || isSaving) return;
+
     const trimmedName = name.trim();
     const newErrors = {};
 
@@ -96,6 +100,7 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
       return;
     }
 
+    isSavingRef.current = true;
     setIsSaving(true);
     setErrors({});
 
@@ -136,6 +141,7 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
       }
       setErrors({ general: msg });
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -164,7 +170,7 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
           </div>
         </div>
         <div className="flex items-center space-x-2.5">
-          <span className="text-[11px] text-neutral-500 font-mono">
+          <span className="text-[11px] text-neutral-400 font-mono">
             Ctrl + ↵ to save
           </span>
           <button
@@ -199,7 +205,7 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
                 placeholder="e.g. Full Stack Development"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-blue-500/70"
+                className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700/80 text-xs text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/50"
               />
             </FormField>
           </div>
@@ -219,7 +225,7 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
                 <div className="w-8 h-4 bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
               </label>
             </div>
-            <span className="text-[10px] text-neutral-500">
+            <span className="text-[10px] text-neutral-400">
               Assign to <code className="text-blue-400">//</code> workspace shortcut
             </span>
           </div>
@@ -231,7 +237,7 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
             <label className="text-xs font-medium text-neutral-300">
               Group Applications & Execution Order <span className="text-rose-400">*</span>
             </label>
-            <span className="text-[11px] text-neutral-500">
+            <span className="text-[11px] text-neutral-400">
               {selectedAppIds.length} selected
             </span>
           </div>
@@ -243,7 +249,7 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
           {/* Selected Execution Order List */}
           {selectedAppIds.length > 0 && (
             <div className="p-2 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1.5">
-              <span className="text-[10px] text-neutral-500 uppercase tracking-wider font-semibold px-2 block">
+              <span className="text-[10px] text-neutral-400 uppercase tracking-wider font-semibold px-2 block">
                 Launch Sequence (Runs in this order):
               </span>
               {selectedAppIds.map((appId, index) => {
@@ -289,7 +295,7 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
                         type="button"
                         onClick={() => handleToggleApp(appId)}
                         title="Remove from group"
-                        className="p-1 rounded text-neutral-500 hover:text-rose-400 transition-colors cursor-pointer"
+                        className="p-1 rounded text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer"
                       >
                         <CloseIcon className="w-3.5 h-3.5" />
                       </button>
@@ -302,11 +308,11 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
 
           {/* Available Apps to Add/Toggle */}
           <div className="space-y-1.5 pt-1">
-            <span className="text-[10px] text-neutral-500 uppercase tracking-wider font-semibold block">
+            <span className="text-[10px] text-neutral-400 uppercase tracking-wider font-semibold block">
               Toggle Applications:
             </span>
             {availableApps.length === 0 ? (
-              <div className="text-xs text-neutral-500 p-3 text-center">
+              <div className="text-xs text-neutral-400 p-3 text-center">
                 No applications registered yet. Please add applications first.
               </div>
             ) : (
@@ -327,14 +333,14 @@ export function GroupFormView({ initialData = null, onCancel, onSuccess }) {
                       <div className="flex items-center space-x-2 min-w-0 pr-1">
                         <AppIcon
                           className={`w-3.5 h-3.5 shrink-0 ${
-                            isSelected ? "text-blue-400" : "text-neutral-500"
+                            isSelected ? "text-blue-400" : "text-neutral-400"
                           }`}
                         />
                         <div className="min-w-0">
                           <span className="text-xs font-medium block truncate">
                             {app.name}
                           </span>
-                          <span className="text-[10px] font-mono text-neutral-500 block">
+                          <span className="text-[10px] font-mono text-neutral-400 block">
                             {app.command}
                           </span>
                         </div>

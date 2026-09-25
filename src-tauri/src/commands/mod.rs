@@ -1,3 +1,4 @@
+pub mod autostart_commands;
 pub mod dialog_commands;
 pub mod execution_commands;
 pub mod parser_commands;

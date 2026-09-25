@@ -16,6 +16,10 @@ src-tauri/gen/schemas/
 # Logs
 *.log
 
+# Local documentation, reports, and verification scripts
+*.md
+scripts/
+
 # System files
 .DS_Store
 Thumbs.db

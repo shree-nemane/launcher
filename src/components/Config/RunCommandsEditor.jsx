@@ -24,7 +24,7 @@ export function RunCommandsEditor({ commands = [], onChange }) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <label className="text-xs font-medium text-neutral-300">
-          Run Commands <span className="text-neutral-500 font-normal">(Optional)</span>
+          Run Commands <span className="text-neutral-400 font-normal">(Optional)</span>
         </label>
         <button
           type="button"
@@ -44,20 +44,20 @@ export function RunCommandsEditor({ commands = [], onChange }) {
                 placeholder="Label (e.g. Frontend)"
                 value={cmd.name}
                 onChange={(e) => handleChange(index, "name", e.target.value)}
-                className="w-1/3 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-blue-500/70"
+                className="w-1/3 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-700/80 text-xs text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/50"
               />
               <input
                 type="text"
                 placeholder="Command (e.g. npm run dev)"
                 value={cmd.command}
                 onChange={(e) => handleChange(index, "command", e.target.value)}
-                className="flex-1 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-blue-500/70 font-mono"
+                className="flex-1 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-700/80 text-xs text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/50 font-mono"
               />
               <button
                 type="button"
                 onClick={() => handleRemove(index)}
                 aria-label="Remove command"
-                className="p-1.5 rounded-md text-neutral-500 hover:text-rose-400 hover:bg-neutral-800/60 transition-colors cursor-pointer"
+                className="p-1.5 rounded-md text-neutral-400 hover:text-rose-400 hover:bg-neutral-800/60 transition-colors cursor-pointer"
               >
                 <CloseIcon className="w-3.5 h-3.5" />
               </button>

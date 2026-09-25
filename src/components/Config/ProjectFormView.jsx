@@ -22,6 +22,7 @@ export function ProjectFormView({ initialData = null, onCancel, onSuccess }) {
 
   const handleKeyDown = (e) => {
     if (e.key === "Escape") {
+      if (isSaving) return;
       e.preventDefault();
       onCancel();
     } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -53,7 +54,7 @@ export function ProjectFormView({ initialData = null, onCancel, onSuccess }) {
           </div>
         </div>
         <div className="flex items-center space-x-2.5">
-          <span className="text-[11px] text-neutral-500 font-mono">
+          <span className="text-[11px] text-neutral-400 font-mono">
             Ctrl + ↵ to save
           </span>
           <button
@@ -87,7 +88,7 @@ export function ProjectFormView({ initialData = null, onCancel, onSuccess }) {
               placeholder="e.g. Deepfake Forensic AI"
               value={formData.name}
               onChange={(e) => handleChange("name", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-blue-500/70"
+              className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700/80 text-xs text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/50"
             />
           </FormField>
 
@@ -97,7 +98,7 @@ export function ProjectFormView({ initialData = null, onCancel, onSuccess }) {
               placeholder="e.g. deepfake"
               value={formData.command}
               onChange={(e) => handleChange("command", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-blue-500/70 font-mono"
+              className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700/80 text-xs text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/50 font-mono"
             />
           </FormField>
         </div>
@@ -109,7 +110,7 @@ export function ProjectFormView({ initialData = null, onCancel, onSuccess }) {
               placeholder="D:\Projects\Deepfake"
               value={formData.path}
               onChange={(e) => handleChange("path", e.target.value)}
-              className="flex-1 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-blue-500/70 font-mono truncate"
+              className="flex-1 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700/80 text-xs text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/50 font-mono truncate"
             />
             <button
               type="button"
@@ -129,7 +130,7 @@ export function ProjectFormView({ initialData = null, onCancel, onSuccess }) {
               placeholder="http://localhost:5173"
               value={formData.url}
               onChange={(e) => handleChange("url", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-blue-500/70 font-mono"
+              className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700/80 text-xs text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/50 font-mono"
             />
           </FormField>
 
@@ -143,7 +144,7 @@ export function ProjectFormView({ initialData = null, onCancel, onSuccess }) {
               placeholder="Defaults to project folder"
               value={formData.workingDirectory}
               onChange={(e) => handleChange("workingDirectory", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-blue-500/70 font-mono"
+              className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700/80 text-xs text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/50 font-mono"
             />
           </FormField>
         </div>

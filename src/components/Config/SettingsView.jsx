@@ -189,7 +189,7 @@ export function SettingsView({ onCancel, onSaved, onNavigate }) {
             <label className="text-xs font-semibold text-neutral-200 block">
               Global Summon Shortcut
             </label>
-            <span className="text-[10px] text-neutral-500 font-mono">
+            <span className="text-[10px] text-neutral-400 font-mono">
               Summon launcher anywhere
             </span>
           </div>
@@ -200,13 +200,13 @@ export function SettingsView({ onCancel, onSaved, onNavigate }) {
               value={globalShortcut}
               onChange={(e) => setGlobalShortcut(e.target.value)}
               placeholder="e.g. Alt+Space"
-              className="flex-1 bg-neutral-950/90 border border-neutral-700/80 rounded-lg px-3 py-1.5 text-xs text-blue-300 font-mono focus:outline-none focus:border-blue-500 transition-colors"
+              className="flex-1 bg-neutral-950/90 border border-neutral-700/80 rounded-lg px-3 py-1.5 text-xs text-blue-300 font-mono focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors"
             />
           </div>
 
           {/* Shortcut presets */}
           <div className="flex items-center space-x-1.5 pt-1">
-            <span className="text-[10px] text-neutral-500 mr-1">Presets:</span>
+            <span className="text-[10px] text-neutral-400 mr-1">Presets:</span>
             {shortcutPresets.map((preset) => (
               <button
                 key={preset}
@@ -230,7 +230,7 @@ export function SettingsView({ onCancel, onSaved, onNavigate }) {
             <label className="text-xs font-semibold text-neutral-200 block">
               Default Workspace Group (//)
             </label>
-            <span className="text-[10px] text-neutral-500">
+            <span className="text-[10px] text-neutral-400">
               Triggered by // shortcut
             </span>
           </div>
@@ -238,7 +238,7 @@ export function SettingsView({ onCancel, onSaved, onNavigate }) {
           <select
             value={defaultGroupId}
             onChange={(e) => setDefaultGroupId(e.target.value)}
-            className="w-full bg-neutral-950/90 border border-neutral-700/80 rounded-lg px-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
+            className="w-full bg-neutral-950/90 border border-neutral-700/80 rounded-lg px-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors cursor-pointer"
           >
             <option value="">-- No default group selected --</option>
             {groups.map((grp) => {
@@ -255,7 +255,7 @@ export function SettingsView({ onCancel, onSaved, onNavigate }) {
 
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-2.5 border-t border-neutral-800/80 bg-neutral-950/90 text-xs">
-        <span className="text-[11px] text-neutral-500">
+        <span className="text-[11px] text-neutral-400">
           Press <kbd className="px-1 py-0.5 rounded bg-neutral-800 text-neutral-400 font-mono text-[10px]">Ctrl+Enter</kbd> to save
         </span>
 

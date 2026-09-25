@@ -14,7 +14,7 @@ export function FormField({
           {label}
           {required && <span className="text-rose-400 ml-1">*</span>}
         </label>
-        {helper && <span className="text-[11px] text-neutral-500">{helper}</span>}
+        {helper && <span className="text-[11px] text-neutral-400">{helper}</span>}
       </div>
 
       {children}

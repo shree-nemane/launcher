@@ -11,7 +11,7 @@ const VARIABLES = [
 export function VariableChips({ onInsert }) {
   return (
     <div className="space-y-1.5 pt-1">
-      <span className="text-[11px] text-neutral-500 font-medium">
+      <span className="text-[11px] text-neutral-400 font-medium">
         Click variable to insert at cursor:
       </span>
       <div className="flex flex-wrap gap-1.5">

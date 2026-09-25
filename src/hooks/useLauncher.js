@@ -6,17 +6,18 @@ export function useLauncher(suggestions = [], onNavigate = null, controlledInput
   const [internalInput, setInternalInput] = useState("");
   const input = setControlledInput ? controlledInput : internalInput;
   const setInput = setControlledInput || setInternalInput;
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isExecuting, setIsExecuting] = useState(false);
+  const isExecutingRef = useRef(false);
   const [error, setError] = useState(null);
   const inputRef = useRef(null);
 
   // Clamp selected index within available suggestions
   useEffect(() => {
     if (suggestions.length === 0) {
-      setSelectedIndex(0);
+      setSelectedIndex(-1);
     } else if (selectedIndex >= suggestions.length) {
-      setSelectedIndex(Math.max(0, suggestions.length - 1));
+      setSelectedIndex(suggestions.length - 1);
     }
   }, [suggestions, selectedIndex]);
 
@@ -28,16 +29,17 @@ export function useLauncher(suggestions = [], onNavigate = null, controlledInput
   const resetState = useCallback(() => {
     setInput("");
     setError(null);
-    setSelectedIndex(0);
+    setSelectedIndex(-1);
     setTimeout(() => {
       inputRef.current?.focus();
     }, 0);
-  }, []);
+  }, [setInput]);
 
   const handleInputChange = useCallback((e) => {
     setInput(e.target.value);
     setError(null); // Clear error on new typing
-  }, []);
+    setSelectedIndex(-1);
+  }, [setInput]);
 
   const handleSelectSuggestion = useCallback(
     (suggestion) => {
@@ -109,7 +111,7 @@ export function useLauncher(suggestions = [], onNavigate = null, controlledInput
 
   const execute = useCallback(
     async (overrideInput) => {
-      if (isExecuting) return;
+      if (isExecutingRef.current) return;
 
       const rawCmd = (overrideInput ?? input).trim();
       if (!rawCmd) return;
@@ -134,6 +136,7 @@ export function useLauncher(suggestions = [], onNavigate = null, controlledInput
         }
       }
 
+      isExecutingRef.current = true;
       setIsExecuting(true);
       setError(null);
 
@@ -207,6 +210,7 @@ export function useLauncher(suggestions = [], onNavigate = null, controlledInput
         }
         setError(msg);
       } finally {
+        isExecutingRef.current = false;
         setIsExecuting(false);
         inputRef.current?.focus();
       }
@@ -216,18 +220,12 @@ export function useLauncher(suggestions = [], onNavigate = null, controlledInput
 
   const handleKeyDown = useCallback(
     (e) => {
-      if (isExecuting) return;
-
-      if (e.key === "Escape") {
-        e.preventDefault();
-        launcherService.hideLauncher();
-        return;
-      }
+      if (isExecutingRef.current || isExecuting) return;
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
         if (suggestions.length > 0) {
-          setSelectedIndex((prev) => (prev + 1) % suggestions.length);
+          setSelectedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
         }
         return;
       }
@@ -244,8 +242,10 @@ export function useLauncher(suggestions = [], onNavigate = null, controlledInput
 
       if (e.key === "Tab") {
         e.preventDefault();
-        if (suggestions.length > 0 && suggestions[selectedIndex]) {
-          handleSelectSuggestion(suggestions[selectedIndex]);
+        const targetIndex = selectedIndex >= 0 ? selectedIndex : 0;
+        if (suggestions.length > 0 && suggestions[targetIndex]) {
+          handleSelectSuggestion(suggestions[targetIndex]);
+          setSelectedIndex(-1);
         }
         return;
       }
@@ -253,32 +253,35 @@ export function useLauncher(suggestions = [], onNavigate = null, controlledInput
       if (e.key === "Enter") {
         e.preventDefault();
 
-        const selected = suggestions.length > 0 ? suggestions[selectedIndex] : null;
-        if (selected) {
+        const trimmed = input.trim();
+
+        // If input is empty and an item was selected with arrow keys, select it
+        if (!trimmed) {
+          if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+            handleSelectSuggestion(suggestions[selectedIndex]);
+          }
+          return;
+        }
+
+        // If user explicitly navigated down to a suggestion with arrow keys
+        if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+          const selected = suggestions[selectedIndex];
           if (selected.kind === "system") {
             handleSelectSuggestion(selected);
             return;
           }
-
-          const tokens = input.trim().split(/\s+/).filter(Boolean);
-          const isProjectLaunchWithApp =
-            input.endsWith(" ") ||
-            (tokens.length === 1 &&
-              !tokens[0].startsWith("/") &&
-              tokens[0] !== "//" &&
-              (selected.kind === "app" || selected.kind === "group"));
-
-          if (tokens.length <= 1 && !isProjectLaunchWithApp) {
-            execute(selected.command);
-            return;
-          } else {
-            const updated = applySuggestionToInput(input, selected.command);
-            execute(updated);
+          // Autocomplete the suggestion into the input text box so it is explicitly typed
+          const updated = applySuggestionToInput(input, selected.command);
+          if (updated.trim() !== trimmed) {
+            setInput(updated);
+            setSelectedIndex(-1);
             return;
           }
         }
 
-        execute();
+        // Execute ONLY what is explicitly typed in the text box
+        execute(trimmed);
+        return;
       }
     },
     [isExecuting, suggestions, selectedIndex, input, handleSelectSuggestion, execute]
@@ -287,8 +290,9 @@ export function useLauncher(suggestions = [], onNavigate = null, controlledInput
   const handleClearInput = useCallback(() => {
     setInput("");
     setError(null);
+    setSelectedIndex(-1);
     inputRef.current?.focus();
-  }, []);
+  }, [setInput]);
 
   const handleClose = useCallback(() => {
     launcherService.hideLauncher();

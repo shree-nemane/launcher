@@ -128,6 +128,7 @@ function App() {
     if (activeView === "launcher") {
       const timer = setTimeout(() => {
         inputRef.current?.focus();
+        launcherService.signalLauncherReady();
       }, 30);
       return () => clearTimeout(timer);
     }
@@ -137,59 +138,61 @@ function App() {
 
   // Listen to native Tauri events (show/hide/reset/navigate/shortcut status)
   useEffect(() => {
-    let unlistenShow;
-    let unlistenHide;
-    let unlistenNav;
-    let unlistenShortcut;
-    let unlistenFocus;
+    let isCancelled = false;
+    let cleanupFns = [];
 
     async function registerListeners() {
       try {
-        unlistenShow = await listen("launcher://show", () => {
-          lastShowTimeRef.current = Date.now();
-          setIsWindowVisible(true);
-          setActiveView("launcher");
-          resetState();
-          setTimeout(() => {
-            inputRef.current?.focus();
-          }, 30);
-        });
-
-        unlistenHide = await listen("launcher://hide", () => {
-          setIsWindowVisible(false);
-          resetState();
-          if (typeof window !== "undefined" && typeof window.gc === "function") {
-            try {
-              window.gc();
-            } catch (_) {}
-          }
-        });
-
-        unlistenNav = await listen("launcher://navigate", (event) => {
-          if (event.payload) {
+        const promises = [
+          listen("launcher://show", () => {
             lastShowTimeRef.current = Date.now();
             setIsWindowVisible(true);
-            setActiveView(event.payload);
-          }
-        });
+            setActiveView("launcher");
+            resetState();
+            setTimeout(() => {
+              inputRef.current?.focus();
+            }, 30);
+          }),
+          listen("launcher://hide", () => {
+            setIsWindowVisible(false);
+            resetState();
+            if (typeof window !== "undefined" && typeof window.gc === "function") {
+              try {
+                window.gc();
+              } catch (_) {}
+            }
+          }),
+          listen("launcher://navigate", (event) => {
+            if (event.payload) {
+              lastShowTimeRef.current = Date.now();
+              setIsWindowVisible(true);
+              setActiveView(event.payload);
+            }
+          }),
+          listen("launcher://shortcut-status", (event) => {
+            if (event.payload && (event.payload.status === "fallback" || event.payload.status === "failed")) {
+              setShortcutWarning(event.payload.message);
+            } else {
+              setShortcutWarning(null);
+            }
+          }),
+          listen("launcher://focus-changed", (event) => {
+            if (
+              !event.payload &&
+              activeViewRef.current === "launcher" &&
+              Date.now() - lastShowTimeRef.current > 100
+            ) {
+              launcherService.hideLauncher();
+            }
+          }),
+        ];
 
-        unlistenShortcut = await listen("launcher://shortcut-status", (event) => {
-          if (event.payload && (event.payload.status === "fallback" || event.payload.status === "failed")) {
-            setShortcutWarning(event.payload.message);
-          } else {
-            setShortcutWarning(null);
-          }
-        });
-
-        unlistenFocus = await listen("launcher://focus-changed", (event) => {
-          if (
-            !event.payload &&
-            activeViewRef.current === "launcher" &&
-            Date.now() - lastShowTimeRef.current > 300
-          ) {
-            launcherService.hideLauncher();
-          }
-        });
+        const resolvedFns = await Promise.all(promises);
+        if (isCancelled) {
+          resolvedFns.forEach((unlisten) => unlisten());
+        } else {
+          cleanupFns = resolvedFns;
+        }
       } catch (e) {
         console.warn("Event listener registration failed (running outside Tauri?):", e);
       }
@@ -198,11 +201,8 @@ function App() {
     registerListeners();
 
     return () => {
-      if (unlistenShow) unlistenShow();
-      if (unlistenHide) unlistenHide();
-      if (unlistenNav) unlistenNav();
-      if (unlistenShortcut) unlistenShortcut();
-      if (unlistenFocus) unlistenFocus();
+      isCancelled = true;
+      cleanupFns.forEach((unlisten) => unlisten());
     };
   }, [resetState, inputRef]);
 

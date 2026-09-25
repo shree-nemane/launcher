@@ -94,30 +94,44 @@ export const launcherService = {
 
   async isAutostartEnabled() {
     try {
-      return await isEnabled();
+      return await invoke("is_autostart_enabled");
     } catch (e) {
-      console.warn("Could not query autostart status:", e);
-      return false;
+      try {
+        return await isEnabled();
+      } catch (err) {
+        console.warn("Could not query autostart status:", err);
+        return false;
+      }
     }
   },
 
   async enableAutostart() {
     try {
-      await enable();
+      await invoke("enable_autostart");
       return true;
     } catch (e) {
-      console.error("Failed to enable autostart:", e);
-      throw e;
+      try {
+        await enable();
+        return true;
+      } catch (err) {
+        console.error("Failed to enable autostart:", err);
+        throw err;
+      }
     }
   },
 
   async disableAutostart() {
     try {
-      await disable();
+      await invoke("disable_autostart");
       return false;
     } catch (e) {
-      console.error("Failed to disable autostart:", e);
-      throw e;
+      try {
+        await disable();
+        return false;
+      } catch (err) {
+        console.error("Failed to disable autostart:", err);
+        throw err;
+      }
     }
   },
 
@@ -130,6 +144,8 @@ export const launcherService = {
   },
 
   async hideLauncher() {
+    if (this._isHiding) return;
+    this._isHiding = true;
     try {
       await invoke("hide_launcher");
     } catch (e) {
@@ -139,6 +155,16 @@ export const launcherService = {
       } catch (err) {
         console.warn("Could not hide native window (running outside Tauri?):", err);
       }
+    } finally {
+      setTimeout(() => {
+        this._isHiding = false;
+      }, 150);
     }
+  },
+
+  async signalLauncherReady() {
+    try {
+      await invoke("signal_launcher_ready");
+    } catch (_) {}
   },
 };

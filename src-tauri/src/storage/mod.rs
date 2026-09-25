@@ -5,7 +5,7 @@ use chrono::Utc;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 use std::time::SystemTime;
 use uuid::Uuid;
 
@@ -26,6 +26,7 @@ struct StorageCache {
 pub struct StorageManager {
     data_dir: PathBuf,
     cache: RwLock<StorageCache>,
+    write_mutex: Mutex<()>,
 }
 
 impl StorageManager {
@@ -71,6 +72,7 @@ impl StorageManager {
         Ok(Self {
             data_dir,
             cache: RwLock::new(cache),
+            write_mutex: Mutex::new(()),
         })
     }
 
@@ -201,6 +203,7 @@ impl StorageManager {
     }
 
     pub fn create_project(&self, mut project: Project) -> Result<Project, AppError> {
+        let _lock = self.write_mutex.lock().unwrap();
         let mut projects = self.get_projects()?;
 
         if project.id.trim().is_empty() {
@@ -227,6 +230,7 @@ impl StorageManager {
     }
 
     pub fn update_project(&self, mut project: Project) -> Result<Project, AppError> {
+        let _lock = self.write_mutex.lock().unwrap();
         let mut projects = self.get_projects()?;
 
         let index = projects
@@ -253,6 +257,7 @@ impl StorageManager {
     }
 
     pub fn delete_project(&self, id: &str) -> Result<(), AppError> {
+        let _lock = self.write_mutex.lock().unwrap();
         let mut projects = self.get_projects()?;
 
         let original_len = projects.len();
@@ -314,6 +319,7 @@ impl StorageManager {
     }
 
     pub fn create_application(&self, mut application: Application) -> Result<Application, AppError> {
+        let _lock = self.write_mutex.lock().unwrap();
         let mut apps = self.get_applications()?;
 
         if application.id.trim().is_empty() {
@@ -340,6 +346,7 @@ impl StorageManager {
     }
 
     pub fn update_application(&self, mut application: Application) -> Result<Application, AppError> {
+        let _lock = self.write_mutex.lock().unwrap();
         let mut apps = self.get_applications()?;
 
         let index = apps
@@ -366,6 +373,7 @@ impl StorageManager {
     }
 
     pub fn delete_application(&self, id: &str) -> Result<(), AppError> {
+        let _lock = self.write_mutex.lock().unwrap();
         let mut apps = self.get_applications()?;
 
         let original_len = apps.len();
@@ -450,6 +458,7 @@ impl StorageManager {
     }
 
     pub fn create_group(&self, mut group: ApplicationGroup) -> Result<ApplicationGroup, AppError> {
+        let _lock = self.write_mutex.lock().unwrap();
         let apps = self.get_applications()?;
         let mut groups = self.get_groups()?;
 
@@ -477,6 +486,7 @@ impl StorageManager {
     }
 
     pub fn update_group(&self, mut group: ApplicationGroup) -> Result<ApplicationGroup, AppError> {
+        let _lock = self.write_mutex.lock().unwrap();
         let apps = self.get_applications()?;
         let mut groups = self.get_groups()?;
 
@@ -504,6 +514,7 @@ impl StorageManager {
     }
 
     pub fn delete_group(&self, id: &str) -> Result<(), AppError> {
+        let _lock = self.write_mutex.lock().unwrap();
         let mut groups = self.get_groups()?;
 
         let original_len = groups.len();
@@ -567,6 +578,7 @@ impl StorageManager {
     }
 
     pub fn update_settings(&self, mut settings: Settings) -> Result<Settings, AppError> {
+        let _lock = self.write_mutex.lock().unwrap();
         let current_settings = self.get_settings()?;
 
         settings.created_at = current_settings.created_at;

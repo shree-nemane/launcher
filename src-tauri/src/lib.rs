@@ -1,3 +1,4 @@
+pub mod autostart_manager;
 pub mod commands;
 pub mod error;
 pub mod execution;
@@ -9,6 +10,10 @@ pub mod validation;
 pub mod window_manager;
 
 use tauri::{Emitter, Manager};
+
+pub fn is_two_process_mode() -> bool {
+    std::env::args().any(|a| a == "--two-process") || std::env::var("LAUNCHER_TWO_PROCESS").is_ok()
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -33,8 +38,10 @@ pub fn run() {
                 .expect("failed to initialize storage manager");
 
             let app_handle = app.handle().clone();
-            let _ = window_manager::setup_system_tray(&app_handle);
-            window_manager::setup_global_shortcut(&app_handle, &storage);
+            if !is_two_process_mode() {
+                let _ = window_manager::setup_system_tray(&app_handle);
+                window_manager::setup_global_shortcut(&app_handle, &storage);
+            }
 
             app.manage(storage);
 
@@ -42,6 +49,9 @@ pub fn run() {
         })
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
+                if is_two_process_mode() {
+                    std::process::exit(0);
+                }
                 api.prevent_close();
                 let _ = window.emit("launcher://hide", ());
                 let _ = window.hide();
@@ -81,6 +91,10 @@ pub fn run() {
             commands::dialog_commands::pick_executable,
             commands::dialog_commands::hide_launcher,
             commands::dialog_commands::close_launcher,
+            commands::dialog_commands::signal_launcher_ready,
+            commands::autostart_commands::is_autostart_enabled,
+            commands::autostart_commands::enable_autostart,
+            commands::autostart_commands::disable_autostart,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
