@@ -32,6 +32,8 @@ const WM_QUERYENDSESSION: UINT = 0x0011;
 const WM_ENDSESSION: UINT = 0x0016;
 
 const MOD_ALT: UINT = 0x0001;
+const MOD_CONTROL: UINT = 0x0002;
+const MOD_SHIFT: UINT = 0x0004;
 const MOD_NOREPEAT: UINT = 0x4000;
 const VK_SPACE: UINT = 0x20;
 const HOTKEY_ID: i32 = 1001;
@@ -42,6 +44,10 @@ const NIM_DELETE: DWORD = 0x00000002;
 const NIF_MESSAGE: UINT = 0x00000001;
 const NIF_ICON: UINT = 0x00000002;
 const NIF_TIP: UINT = 0x00000004;
+const NIF_INFO: UINT = 0x00000010;
+
+const NIIF_INFO: DWORD = 0x00000001;
+const NIIF_WARNING: DWORD = 0x00000002;
 
 const EMBEDDED_ICON_ID: usize = 1;
 const IDI_APPLICATION: usize = 32512;
@@ -64,7 +70,15 @@ const ERROR_ALREADY_EXISTS: DWORD = 183;
 const STILL_ACTIVE: DWORD = 259;
 
 const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: DWORD = 0x00002000;
+const JOB_OBJECT_LIMIT_BREAKAWAY_OK: DWORD = 0x00000800;
 const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION: DWORD = 9;
+
+const HOTKEY_NONE: u32 = 0;
+const HOTKEY_ALT_SPACE: u32 = 1;
+const HOTKEY_ALT_SHIFT_SPACE: u32 = 2;
+const HOTKEY_CTRL_ALT_SPACE: u32 = 3;
+
+static ACTIVE_HOTKEY: AtomicU32 = AtomicU32::new(HOTKEY_NONE);
 
 const MUTEX_NAME: &str = "Local\\UniversalLauncherHostMutex";
 const CLASS_NAME: &str = "UniversalLauncherHostClass";
@@ -354,7 +368,7 @@ fn load_application_icons(h_instance: HINSTANCE) -> (HICON, HICON) {
     }
 }
 
-fn add_or_update_tray_icon(hwnd: HWND) {
+fn add_or_update_tray_icon(hwnd: HWND, notification: Option<(&str, &str, DWORD)>) {
     let h_icon_tray = TRAY_ICON_HANDLE.load(Ordering::SeqCst);
     let mut nid: NOTIFYICONDATAW = unsafe { std::mem::zeroed() };
     nid.cb_size = std::mem::size_of::<NOTIFYICONDATAW>() as DWORD;
@@ -364,15 +378,84 @@ fn add_or_update_tray_icon(hwnd: HWND) {
     nid.u_callback_message = WM_TRAYICON;
     nid.h_icon = h_icon_tray;
 
-    let tip = to_wide_chars("Universal Launcher Host");
+    let tip_text = match ACTIVE_HOTKEY.load(Ordering::Relaxed) {
+        HOTKEY_ALT_SPACE => "Universal Launcher (Alt+Space)",
+        HOTKEY_ALT_SHIFT_SPACE => "Universal Launcher (Alt+Shift+Space)",
+        HOTKEY_CTRL_ALT_SPACE => "Universal Launcher (Ctrl+Alt+Space)",
+        _ => "Universal Launcher (Hotkey unavailable)",
+    };
+    let tip = to_wide_chars(tip_text);
     for (i, &ch) in tip.iter().take(127).enumerate() {
         nid.sz_tip[i] = ch;
+    }
+
+    if let Some((title, msg, flags)) = notification {
+        nid.u_flags |= NIF_INFO;
+        nid.dw_info_flags = flags;
+        let wide_title = to_wide_chars(title);
+        for (i, &ch) in wide_title.iter().take(63).enumerate() {
+            nid.sz_info_title[i] = ch;
+        }
+        let wide_msg = to_wide_chars(msg);
+        for (i, &ch) in wide_msg.iter().take(255).enumerate() {
+            nid.sz_info[i] = ch;
+        }
     }
 
     unsafe {
         if Shell_NotifyIconW(NIM_ADD, &mut nid) == 0 {
             Shell_NotifyIconW(NIM_MODIFY, &mut nid);
         }
+    }
+}
+
+fn register_hotkey_with_fallback(hwnd: HWND) {
+    unsafe {
+        // 1. Attempt primary preferred shortcut: Alt+Space
+        if RegisterHotKey(hwnd, HOTKEY_ID, MOD_ALT | MOD_NOREPEAT, VK_SPACE) != 0 {
+            ACTIVE_HOTKEY.store(HOTKEY_ALT_SPACE, Ordering::SeqCst);
+            add_or_update_tray_icon(hwnd, None);
+            return;
+        }
+
+        // 2. Conflict detected - attempt fallback 1: Alt+Shift+Space
+        if RegisterHotKey(hwnd, HOTKEY_ID, MOD_ALT | MOD_SHIFT | MOD_NOREPEAT, VK_SPACE) != 0 {
+            ACTIVE_HOTKEY.store(HOTKEY_ALT_SHIFT_SPACE, Ordering::SeqCst);
+            add_or_update_tray_icon(
+                hwnd,
+                Some((
+                    "Universal Launcher",
+                    "Alt+Space is in use by another app. Hotkey set to Alt+Shift+Space.",
+                    NIIF_INFO,
+                )),
+            );
+            return;
+        }
+
+        // 3. Attempt fallback 2: Ctrl+Alt+Space
+        if RegisterHotKey(hwnd, HOTKEY_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_SPACE) != 0 {
+            ACTIVE_HOTKEY.store(HOTKEY_CTRL_ALT_SPACE, Ordering::SeqCst);
+            add_or_update_tray_icon(
+                hwnd,
+                Some((
+                    "Universal Launcher",
+                    "Alt+Space is in use by another app. Hotkey set to Ctrl+Alt+Space.",
+                    NIIF_INFO,
+                )),
+            );
+            return;
+        }
+
+        // 4. All fallbacks failed
+        ACTIVE_HOTKEY.store(HOTKEY_NONE, Ordering::SeqCst);
+        add_or_update_tray_icon(
+            hwnd,
+            Some((
+                "Universal Launcher",
+                "Could not register hotkey (Alt+Space in use). Click tray icon to open.",
+                NIIF_WARNING,
+            )),
+        );
     }
 }
 
@@ -461,11 +544,13 @@ fn spawn_ui() {
     let mut cmd_wide = to_wide_chars(&cmd_string);
 
     unsafe {
-        // Create Job Object with KILL_ON_JOB_CLOSE so all child processes terminate atomically
+        // Create Job Object with KILL_ON_JOB_CLOSE and BREAKAWAY_OK
+        // This keeps WebView2 trapped while allowing spawned user apps to break away
         let h_job = CreateJobObjectW(std::ptr::null_mut(), std::ptr::null());
         if !h_job.is_null() {
             let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-            info.basic_limit_information.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            info.basic_limit_information.limit_flags =
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
             SetInformationJobObject(
                 h_job,
                 JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
@@ -588,7 +673,13 @@ unsafe extern "system" fn window_proc(
                 SetForegroundWindow(hwnd);
 
                 let hmenu = CreatePopupMenu();
-                let open_text = to_wide_chars("Open Launcher (Alt+Space)");
+                let open_label = match ACTIVE_HOTKEY.load(Ordering::Relaxed) {
+                    HOTKEY_ALT_SPACE => "Open Launcher (Alt+Space)",
+                    HOTKEY_ALT_SHIFT_SPACE => "Open Launcher (Alt+Shift+Space)",
+                    HOTKEY_CTRL_ALT_SPACE => "Open Launcher (Ctrl+Alt+Space)",
+                    _ => "Open Launcher",
+                };
+                let open_text = to_wide_chars(open_label);
                 let quit_text = to_wide_chars("Quit");
 
                 AppendMenuW(hmenu, MF_STRING, IDM_OPEN, open_text.as_ptr());
@@ -638,7 +729,7 @@ unsafe extern "system" fn window_proc(
         _ => {
             let taskbar_msg = WM_TASKBAR_CREATED.load(Ordering::Relaxed);
             if taskbar_msg != 0 && msg == taskbar_msg {
-                add_or_update_tray_icon(hwnd);
+                add_or_update_tray_icon(hwnd, None);
                 return 0;
             }
             DefWindowProcW(hwnd, msg, wparam, lparam)
@@ -727,20 +818,15 @@ fn main() {
         return;
     }
 
-    // 5. Register global Alt+Space hotkey
-    unsafe {
-        let _ = RegisterHotKey(hwnd, HOTKEY_ID, MOD_ALT | MOD_NOREPEAT, VK_SPACE);
-    }
+    // 5. Register global hotkey with fallback & initialize tray icon
+    register_hotkey_with_fallback(hwnd);
 
-    // 6. Create System Tray icon with embedded branded icon
-    add_or_update_tray_icon(hwnd);
-
-    // 7. If --open was passed on startup, open UI immediately
+    // 6. If --open was passed on startup, open UI immediately
     if should_open {
         ensure_ui_open_and_focused();
     }
 
-    // 8. Message Loop
+    // 7. Message Loop
     let mut msg: MSG = unsafe { std::mem::zeroed() };
     unsafe {
         while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
@@ -803,8 +889,20 @@ mod tests {
             assert!(!hwnd.is_null(), "Test window should be created");
 
             TRAY_ICON_HANDLE.store(icon_tray, Ordering::SeqCst);
-            add_or_update_tray_icon(hwnd);
+            add_or_update_tray_icon(hwnd, None);
             remove_tray_icon(hwnd);
         }
+    }
+
+    #[test]
+    fn test_hotkey_labels() {
+        ACTIVE_HOTKEY.store(HOTKEY_ALT_SPACE, Ordering::SeqCst);
+        assert_eq!(ACTIVE_HOTKEY.load(Ordering::Relaxed), HOTKEY_ALT_SPACE);
+        ACTIVE_HOTKEY.store(HOTKEY_ALT_SHIFT_SPACE, Ordering::SeqCst);
+        assert_eq!(ACTIVE_HOTKEY.load(Ordering::Relaxed), HOTKEY_ALT_SHIFT_SPACE);
+        ACTIVE_HOTKEY.store(HOTKEY_CTRL_ALT_SPACE, Ordering::SeqCst);
+        assert_eq!(ACTIVE_HOTKEY.load(Ordering::Relaxed), HOTKEY_CTRL_ALT_SPACE);
+        ACTIVE_HOTKEY.store(HOTKEY_NONE, Ordering::SeqCst);
+        assert_eq!(ACTIVE_HOTKEY.load(Ordering::Relaxed), HOTKEY_NONE);
     }
 }

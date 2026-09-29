@@ -8,17 +8,15 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 pub fn configure_webview2_environment() {
     let current_args = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
     let memory_flags = [
-        "--in-process-gpu",
+        "--enable-gpu-rasterization",
         "--enable-features=NetworkServiceInProcess",
         "--disable-features=CalculateNativeWinOcclusion,SpareRendererForSitePerProcess,AudioServiceOutOfProcess",
-        "--disable-gpu-shader-disk-cache",
         "--disable-background-networking",
         "--disable-component-update",
         "--disable-domain-reliability",
         "--disable-sync",
         "--disable-speech-api",
         "--renderer-process-limit=1",
-        "--enable-low-end-device-mode",
         "--process-per-site",
         "--js-flags=--max-old-space-size=64",
     ]

@@ -207,15 +207,15 @@ pub fn execute(plan: &ExecutionPlan) -> ExecutionResult {
 fn resolve_executable_and_args(executable_path: &str, arguments: &[String]) -> (String, Vec<String>) {
     let lower = executable_path.to_lowercase();
 
-    // 1. If it's a batch script (.cmd or .bat), launch via cmd.exe /c
-    if lower.ends_with(".cmd") || lower.ends_with(".bat") {
-        let mut cmd_args = vec!["/c".to_string(), executable_path.to_string()];
-        cmd_args.extend_from_slice(arguments);
-        return ("cmd.exe".to_string(), cmd_args);
-    }
-
-    // 2. If it is "code" or "code.exe" and not an absolute path, resolve actual Code.exe
-    if lower == "code" || lower == "code.exe" {
+    // 1. If it is "code", "code.exe", "code.cmd", or points to code.cmd in VS Code bin, resolve actual Code.exe
+    if lower == "code"
+        || lower == "code.exe"
+        || lower == "code.cmd"
+        || lower.ends_with("\\code.cmd")
+        || lower.ends_with("/code.cmd")
+        || lower.ends_with("\\code.exe")
+        || lower.ends_with("/code.exe")
+    {
         if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
             let user_code = Path::new(&local_app_data)
                 .join("Programs")
@@ -233,6 +233,13 @@ fn resolve_executable_and_args(executable_path: &str, arguments: &[String]) -> (
         if sys_code_x86.is_file() {
             return (sys_code_x86.to_string_lossy().to_string(), arguments.to_vec());
         }
+    }
+
+    // 2. If it's a batch script (.cmd or .bat), launch via cmd.exe /c
+    if lower.ends_with(".cmd") || lower.ends_with(".bat") {
+        let mut cmd_args = vec!["/c".to_string(), executable_path.to_string()];
+        cmd_args.extend_from_slice(arguments);
+        return ("cmd.exe".to_string(), cmd_args);
     }
 
     (executable_path.to_string(), arguments.to_vec())
@@ -257,8 +264,8 @@ fn spawn_process(
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
-        const CREATE_NEW_CONSOLE: u32 = 0x00000010;
-        cmd.creation_flags(CREATE_NEW_CONSOLE);
+        const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
+        cmd.creation_flags(CREATE_BREAKAWAY_FROM_JOB);
     }
 
     if let Some(ref wd) = working_directory {
@@ -292,7 +299,12 @@ fn spawn_process(
 fn open_folder_detached(path: &str) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
     {
-        Command::new("explorer").arg(path).spawn()?;
+        use std::os::windows::process::CommandExt;
+        const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
+        let mut cmd = Command::new("explorer");
+        cmd.arg(path);
+        cmd.creation_flags(CREATE_BREAKAWAY_FROM_JOB);
+        cmd.spawn()?;
     }
 
     #[cfg(target_os = "macos")]
