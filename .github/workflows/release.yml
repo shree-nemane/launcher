@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Windows x64 Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run Rust tests
+        working-directory: src-tauri
+        run: cargo test --workspace
+
+      - name: Build and publish Windows release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Universal Project Launcher ${{ github.ref_name }}"
+          releaseBody: |
+            ## Universal Project Launcher ${{ github.ref_name }}
+
+            Windows x64 production release.
+
+            ### Installation
+
+            1. Download the Windows installer from the Assets below.
+            2. Run the installer.
+            3. Launch using the Desktop or Start Menu shortcut, or press **Alt+Space**.
+
+            ### Note
+
+            This release is currently unsigned.
+            Windows SmartScreen may display a security warning during installation.
+
+          releaseDraft: false
+          prerelease: false
+          args: "--bundles nsis"
