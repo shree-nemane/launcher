@@ -5,24 +5,25 @@ use crate::models::Project;
 use crate::resolver::ResolvedCommand;
 
 #[cfg(target_os = "windows")]
-fn detect_powershell_executable() -> &'static str {
-    // Check if pwsh.exe (PowerShell 7) is in PATH
+fn is_windows_terminal_available() -> bool {
     if let Ok(path_var) = std::env::var("PATH") {
         for dir in std::env::split_paths(&path_var) {
-            if dir.join("pwsh.exe").is_file() {
-                return "pwsh.exe";
+            if dir.join("wt.exe").is_file() {
+                return true;
             }
         }
     }
-    // Check standard Program Files installation paths for PowerShell 7
-    if std::path::Path::new("C:\\Program Files\\PowerShell\\7\\pwsh.exe").is_file() {
-        return "C:\\Program Files\\PowerShell\\7\\pwsh.exe";
+    if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+        if std::path::Path::new(&local_appdata)
+            .join("Microsoft")
+            .join("WindowsApps")
+            .join("wt.exe")
+            .is_file()
+        {
+            return true;
+        }
     }
-    if std::path::Path::new("C:\\Program Files\\PowerShell\\7-preview\\pwsh.exe").is_file() {
-        return "C:\\Program Files\\PowerShell\\7-preview\\pwsh.exe";
-    }
-    // Fallback to built-in Windows PowerShell if PowerShell 7 is not installed
-    "powershell.exe"
+    false
 }
 
 fn create_run_command_actions(proj: &Project) -> Vec<LaunchAction> {
@@ -32,32 +33,84 @@ fn create_run_command_actions(proj: &Project) -> Vec<LaunchAction> {
         .as_deref()
         .unwrap_or(&proj.path);
 
-    for cmd in &proj.run_commands {
-        let label = if cmd.name.trim().is_empty() {
-            cmd.command.clone()
-        } else {
-            cmd.name.clone()
-        };
-        let title = format!("{}: {}", proj.name, label);
+    if proj.run_commands.is_empty() {
+        return actions;
+    }
 
-        #[cfg(target_os = "windows")]
-        {
-            let ps_exe = detect_powershell_executable();
-            let escaped_dir = work_dir.replace('\'', "''");
+    #[cfg(target_os = "windows")]
+    {
+        if is_windows_terminal_available() {
+            // Bundle all project run commands into a single multi-tab Windows Terminal window
+            let mut wt_args = Vec::new();
+            for (idx, cmd) in proj.run_commands.iter().enumerate() {
+                if idx > 0 {
+                    wt_args.push(";".to_string());
+                }
+                let label = if cmd.name.trim().is_empty() {
+                    cmd.command.clone()
+                } else {
+                    cmd.name.clone()
+                };
+                let title = format!("{}: {}", proj.name, label);
+                wt_args.push("new-tab".to_string());
+                wt_args.push("--title".to_string());
+                wt_args.push(title);
+                wt_args.push("-d".to_string());
+                wt_args.push(work_dir.to_string());
+                wt_args.push("cmd.exe".to_string());
+                wt_args.push("/k".to_string());
+                wt_args.push(cmd.command.clone());
+            }
+
+            let title = if proj.run_commands.len() == 1 {
+                let label = if proj.run_commands[0].name.trim().is_empty() {
+                    proj.run_commands[0].command.clone()
+                } else {
+                    proj.run_commands[0].name.clone()
+                };
+                format!("{}: {}", proj.name, label)
+            } else {
+                format!("{}: Dev Servers", proj.name)
+            };
+
             actions.push(LaunchAction::Process {
-                name: title.clone(),
-                executable_path: ps_exe.to_string(),
+                name: title,
+                executable_path: "wt.exe".to_string(),
+                arguments: wt_args,
+                working_directory: Some(work_dir.to_string()),
+            });
+            return actions;
+        }
+
+        // Fallback: If wt.exe is not available, spawn individual cmd.exe windows
+        for cmd in &proj.run_commands {
+            let label = if cmd.name.trim().is_empty() {
+                cmd.command.clone()
+            } else {
+                cmd.name.clone()
+            };
+            let title = format!("{}: {}", proj.name, label);
+            actions.push(LaunchAction::Process {
+                name: title,
+                executable_path: "cmd.exe".to_string(),
                 arguments: vec![
-                    "-NoExit".to_string(),
-                    "-Command".to_string(),
-                    format!("Set-Location '{}'; {}", escaped_dir, cmd.command),
+                    "/k".to_string(),
+                    format!("cd /d \"{}\" && {}", work_dir, cmd.command),
                 ],
                 working_directory: Some(work_dir.to_string()),
             });
         }
+    }
 
-        #[cfg(not(target_os = "windows"))]
-        {
+    #[cfg(not(target_os = "windows"))]
+    {
+        for cmd in &proj.run_commands {
+            let label = if cmd.name.trim().is_empty() {
+                cmd.command.clone()
+            } else {
+                cmd.name.clone()
+            };
+            let title = format!("{}: {}", proj.name, label);
             actions.push(LaunchAction::Process {
                 name: title,
                 executable_path: "sh".to_string(),
@@ -157,18 +210,27 @@ pub fn plan(resolved: &ResolvedCommand) -> Result<ExecutionPlan, PlanningError> 
                                 .unwrap_or(&proj.path);
                             #[cfg(target_os = "windows")]
                             {
-                                let ps_exe = detect_powershell_executable();
-                                let escaped_dir = work_dir.replace('\'', "''");
-                                actions.push(LaunchAction::Process {
-                                    name: format!("{}: PowerShell", proj.name),
-                                    executable_path: ps_exe.to_string(),
-                                    arguments: vec![
-                                        "-NoExit".to_string(),
-                                        "-Command".to_string(),
-                                        format!("Set-Location '{}'", escaped_dir),
-                                    ],
-                                    working_directory: Some(work_dir.to_string()),
-                                });
+                                if is_windows_terminal_available() {
+                                    actions.push(LaunchAction::Process {
+                                        name: format!("{}: Terminal", proj.name),
+                                        executable_path: "wt.exe".to_string(),
+                                        arguments: vec![
+                                            "-d".to_string(),
+                                            work_dir.to_string(),
+                                        ],
+                                        working_directory: Some(work_dir.to_string()),
+                                    });
+                                } else {
+                                    actions.push(LaunchAction::Process {
+                                        name: format!("{}: Command Prompt", proj.name),
+                                        executable_path: "cmd.exe".to_string(),
+                                        arguments: vec![
+                                            "/k".to_string(),
+                                            format!("cd /d \"{}\"", work_dir),
+                                        ],
+                                        working_directory: Some(work_dir.to_string()),
+                                    });
+                                }
                             }
                             #[cfg(not(target_os = "windows"))]
                             {

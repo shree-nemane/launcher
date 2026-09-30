@@ -6,8 +6,8 @@ fn main() {
         res.set("FileDescription", "Universal Launcher Host");
         res.set("ProductName", "Universal Project Launcher");
         res.set("CompanyName", "Atom");
-        res.set("FileVersion", "0.1.0");
-        res.set("ProductVersion", "0.1.0");
+        res.set("FileVersion", env!("CARGO_PKG_VERSION"));
+        res.set("ProductVersion", env!("CARGO_PKG_VERSION"));
         res.set("OriginalFilename", "launcher-host.exe");
         res.set("InternalName", "launcher-host");
         res.set("LegalCopyright", "Copyright © 2026 Atom");

@@ -537,7 +537,7 @@ fn test_paths_with_spaces_and_special_chars() {
 }
 
 #[test]
-fn test_powershell_work_dir_with_single_quotes() {
+fn test_cmd_work_dir_with_quotes() {
     let temp_dir = tempdir().unwrap();
     let special_dir = temp_dir.path().join("User's Project");
     fs::create_dir(&special_dir).unwrap();
@@ -565,14 +565,90 @@ fn test_powershell_work_dir_with_single_quotes() {
         ExecutionPlan::Launch { actions } => {
             assert_eq!(actions.len(), 1);
             match &actions[0] {
-                LaunchAction::Process { arguments, .. } => {
+                LaunchAction::Process {
+                    executable_path,
+                    arguments,
+                    ..
+                } => {
                     #[cfg(target_os = "windows")]
                     {
-                        let cmd_arg = &arguments[2];
-                        assert!(cmd_arg.contains("User''s Project"));
+                        if executable_path == "wt.exe" {
+                            assert!(arguments.iter().any(|a| a.contains("User's Project")));
+                            assert!(arguments.iter().any(|a| a.contains("npm start")));
+                        } else {
+                            assert_eq!(executable_path, "cmd.exe");
+                            assert_eq!(arguments[0], "/k");
+                            assert!(arguments[1].contains("User's Project"));
+                            assert!(arguments[1].contains("npm start"));
+                        }
                     }
                 }
                 _ => panic!("Expected Process action"),
+            }
+        }
+        _ => panic!("Expected ExecutionPlan::Launch"),
+    }
+}
+
+#[test]
+fn test_multiple_run_commands_bundled_into_single_wt_window() {
+    let temp_dir = tempdir().unwrap();
+    let proj_dir = temp_dir.path().join("multi_run_proj");
+    fs::create_dir(&proj_dir).unwrap();
+
+    let (_dir, storage, _, _, _, _) = setup_test_environment();
+    storage
+        .create_project(Project {
+            id: "".to_string(),
+            name: "Multi App".to_string(),
+            command: "multi".to_string(),
+            path: proj_dir.to_str().unwrap().to_string(),
+            url: None,
+            run_commands: vec![
+                RunCommand {
+                    name: "Frontend".to_string(),
+                    command: "npm run dev".to_string(),
+                },
+                RunCommand {
+                    name: "Backend".to_string(),
+                    command: "npm run api".to_string(),
+                },
+            ],
+            working_directory: None,
+            created_at: "".to_string(),
+            updated_at: "".to_string(),
+        })
+        .unwrap();
+
+    let plan = plan_raw("multi /run", &storage).unwrap();
+    match plan {
+        ExecutionPlan::Launch { actions } => {
+            #[cfg(target_os = "windows")]
+            {
+                if actions.len() == 1 {
+                    match &actions[0] {
+                        LaunchAction::Process {
+                            executable_path,
+                            arguments,
+                            name,
+                            ..
+                        } => {
+                            assert_eq!(executable_path, "wt.exe");
+                            assert_eq!(name, "Multi App: Dev Servers");
+                            assert!(arguments.contains(&"new-tab".to_string()));
+                            assert!(arguments.contains(&";".to_string()));
+                            assert!(arguments.iter().any(|a| a.contains("npm run dev")));
+                            assert!(arguments.iter().any(|a| a.contains("npm run api")));
+                        }
+                        _ => panic!("Expected Process action for Windows Terminal"),
+                    }
+                } else {
+                    assert_eq!(actions.len(), 2);
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                assert_eq!(actions.len(), 2);
             }
         }
         _ => panic!("Expected ExecutionPlan::Launch"),
