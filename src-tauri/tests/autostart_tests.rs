@@ -38,8 +38,13 @@ fn test_host_autostart_lifecycle() {
 fn test_enable_autostart_command() {
     let _lock = REGISTRY_LOCK.lock().unwrap();
     use launcher_lib::autostart_manager;
-    let res = autostart_manager::enable_host_autostart();
-    assert!(res.is_ok());
+let res = autostart_manager::enable_host_autostart();
+
+assert!(
+    res.is_ok(),
+    "enable_host_autostart failed: {:?}",
+    res
+);
     assert!(autostart_manager::is_host_autostart_enabled().unwrap());
     let _ = autostart_manager::disable_host_autostart();
 }
@@ -50,6 +55,10 @@ fn test_disable_autostart_command() {
     let _lock = REGISTRY_LOCK.lock().unwrap();
     use launcher_lib::autostart_manager;
     let res = autostart_manager::disable_host_autostart();
-    assert!(res.is_ok());
+    assert!(
+        res.is_ok(),
+        "disable_host_autostart failed: {:?}",
+        res
+    );
     assert!(!autostart_manager::is_host_autostart_enabled().unwrap());
 }
